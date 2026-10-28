@@ -203,6 +203,34 @@ goal editor: View::web = """
     }}
     .statusbar .path {{ color: #cfcfcf; }}
     .statusbar .path-separator {{ color: #777777; }}
+    .status-actions {{
+        display: flex;
+        align-items: center;
+        gap: 0.15rem;
+        height: 100%;
+    }}
+    .status-actions button {{
+        display: grid;
+        place-items: center;
+        height: 1.25rem;
+        min-width: 1.45rem;
+        padding: 0 0.35rem;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        color: #c5c5c5;
+        font-size: 0.72rem;
+        line-height: 1;
+    }}
+    .status-actions button:hover {{ background: #505254; color: white; }}
+    .status-actions .run {{ color: #62b543; }}
+    .status-actions .run-config {{
+        display: flex;
+        min-width: 6.5rem;
+        justify-content: space-between;
+        color: #d0d0d0;
+    }}
+    .status-actions .debug {{ color: #7ba45d; font-weight: 700; }}
     .statusbar .status-spacer {{ flex: 1; }}
     .statusbar span {{ white-space: nowrap; }}
     @media (max-width: 800px) {{
@@ -312,11 +340,13 @@ goal editor: View::web = """
         <span class="path-separator">›</span>
         <span class="path">app.sic</span>
         <span class="status-spacer"></span>
-        <span>Ln 1, Col 1</span>
-        <span>LF</span>
-        <span>UTF-8</span>
-        <span>4 spaces</span>
-        <span>SIC</span>
+        <div class="status-actions" aria-label="Editor-Aktionen">
+            <button class="run" title="Run">▶</button>
+            <button class="run-config" title="Run Configuration"><span>app.sic</span><span>▾</span></button>
+            <button class="debug" title="Debug">D</button>
+            <button title="Search">⌕</button>
+            <button title="Settings">⚙</button>
+        </div>
     </footer>
 </main>
 """
