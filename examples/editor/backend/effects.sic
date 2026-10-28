@@ -1,0 +1,2 @@
+# Platzhalter für spätere Editor- und Compiler-Effekte.
+effect SourceChanged: String

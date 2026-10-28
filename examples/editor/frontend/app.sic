@@ -1,0 +1,324 @@
+goal editor: View::web = """
+<style>
+    :root {{
+        color-scheme: dark;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #2b2b2b;
+        color: #bbbbbb;
+    }}
+    * {{ box-sizing: border-box; }}
+    html, body {{ height: 100%; }}
+    body {{ margin: 0; overflow: hidden; }}
+    button, textarea {{ font: inherit; }}
+    button {{ color: inherit; }}
+    .ide-shell {{
+        display: grid;
+        grid-template-columns: 2.05rem 15rem minmax(30rem, 1fr) 2.05rem;
+        grid-template-rows: minmax(0, 1fr) 1.55rem;
+        width: 100vw;
+        height: 100vh;
+        background: #2b2b2b;
+        font-size: 0.78rem;
+    }}
+    .tool-stripe {{
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        min-height: 0;
+        background: #3c3f41;
+        border-color: #515151;
+    }}
+    .tool-stripe.left {{ border-right: 1px solid #515151; }}
+    .tool-stripe.right {{ border-left: 1px solid #515151; }}
+    .tool-stripe button {{
+        display: grid;
+        place-items: center;
+        width: 100%;
+        min-height: 2.15rem;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #a7a7a7;
+        cursor: default;
+        font-size: 0.9rem;
+    }}
+    .tool-stripe button:hover {{ background: #4b4d4f; color: #e8e8e8; }}
+    .tool-stripe button.active {{
+        background: #4b4d4f;
+        color: #f0f0f0;
+        box-shadow: inset 2px 0 #589df6;
+    }}
+    .tool-stripe .spacer {{ flex: 1; }}
+    .project-panel {{
+        display: grid;
+        grid-template-rows: 2.2rem minmax(0, 1fr);
+        min-width: 0;
+        min-height: 0;
+        background: #3c3f41;
+        border-right: 1px solid #515151;
+    }}
+    .project-titlebar {{
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0 0.45rem 0 0.65rem;
+        border-bottom: 1px solid #515151;
+        color: #d6d6d6;
+        font-weight: 600;
+    }}
+    .project-titlebar strong {{ flex: 1; font-weight: 600; }}
+    .project-titlebar button {{
+        width: 1.45rem;
+        height: 1.45rem;
+        padding: 0;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        color: #a6a6a6;
+    }}
+    .project-titlebar button:hover {{ background: #505254; color: white; }}
+    .project-body {{ min-height: 0; overflow: auto; padding-top: 0.25rem; }}
+    .file-tree, .file-tree ul {{ margin: 0; padding: 0; list-style: none; }}
+    .file-tree details > summary {{
+        min-height: 1.55rem;
+        padding: 0.22rem 0.45rem;
+        cursor: default;
+        color: #c8c8c8;
+        font-size: 0.78rem;
+        font-weight: 500;
+        user-select: none;
+        white-space: nowrap;
+    }}
+    .file-tree details > summary:hover, .file-tree-file:hover {{ background: #47494b; }}
+    .file-tree details > ul {{ padding-left: 0.9rem; }}
+    .file-tree-file {{
+        display: flex;
+        align-items: center;
+        gap: 0.38rem;
+        min-height: 1.55rem;
+        padding: 0.22rem 0.55rem;
+        color: #c8c8c8;
+        white-space: nowrap;
+        cursor: default;
+    }}
+    .file-tree-file::before {{
+        content: "S";
+        display: inline-grid;
+        place-items: center;
+        width: 0.9rem;
+        height: 0.9rem;
+        border-radius: 2px;
+        background: #6a8759;
+        color: #f2f2f2;
+        font-size: 0.58rem;
+        font-weight: 700;
+    }}
+    .file-tree-file.markdown::before {{ content: "M"; background: #4a88c7; }}
+    .file-tree-file.active {{ background: #4b6eaf; color: #ffffff; }}
+    .editor-panel {{
+        display: grid;
+        grid-template-rows: 2.2rem minmax(0, 1fr);
+        min-width: 0;
+        min-height: 0;
+        background: #2b2b2b;
+    }}
+    .tabs {{
+        display: flex;
+        align-items: end;
+        border-bottom: 1px solid #515151;
+        background: #3c3f41;
+    }}
+    .editor-tab {{
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        height: 100%;
+        min-width: 10rem;
+        padding: 0 0.65rem;
+        border-right: 1px solid #515151;
+        border-top: 2px solid #589df6;
+        background: #2b2b2b;
+        color: #dedede;
+    }}
+    .sic-icon {{
+        display: inline-grid;
+        place-items: center;
+        width: 0.9rem;
+        height: 0.9rem;
+        border-radius: 2px;
+        background: #6a8759;
+        color: white;
+        font-size: 0.58rem;
+        font-weight: 700;
+    }}
+    .editor-tab .close {{ margin-left: auto; color: #8c8c8c; font-size: 1rem; }}
+    .editor-canvas {{
+        display: grid;
+        grid-template-columns: 3.4rem minmax(0, 1fr);
+        min-width: 0;
+        min-height: 0;
+        background: #2b2b2b;
+    }}
+    .line-numbers {{
+        min-height: 0;
+        padding: 0.75rem 0.75rem 0.75rem 0;
+        overflow: hidden;
+        border-right: 1px solid #313335;
+        color: #606366;
+        background: #313335;
+        text-align: right;
+        white-space: pre;
+        user-select: none;
+        font: 0.88rem/1.55 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    }}
+    .source-editor {{
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+        padding: 0.75rem 1rem;
+        resize: none;
+        border: 0;
+        outline: none;
+        background: #2b2b2b;
+        color: #a9b7c6;
+        caret-color: #f8f8f0;
+        font: 0.88rem/1.55 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+        tab-size: 4;
+        white-space: pre;
+    }}
+    .source-editor::selection {{ background: #214283; }}
+    .statusbar {{
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        min-width: 0;
+        padding: 0 0.5rem;
+        border-top: 1px solid #515151;
+        background: #3c3f41;
+        color: #b6b6b6;
+        font-size: 0.7rem;
+        user-select: none;
+    }}
+    .statusbar .path {{ color: #cfcfcf; }}
+    .statusbar .path-separator {{ color: #777777; }}
+    .statusbar .status-spacer {{ flex: 1; }}
+    .statusbar span {{ white-space: nowrap; }}
+    @media (max-width: 800px) {{
+        .ide-shell {{ grid-template-columns: 1.8rem 11rem minmax(24rem, 1fr) 1.8rem; }}
+    }}
+</style>
+<main class="ide-shell">
+    <aside class="tool-stripe left" aria-label="Werkzeugfenster">
+        <button class="active" title="Project">▦</button>
+        <button title="Structure">⌘</button>
+        <button title="Commit">✓</button>
+        <span class="spacer"></span>
+        <button title="Terminal">›_</button>
+    </aside>
+
+    <aside class="project-panel" aria-label="Projekt">
+        <div class="project-titlebar">
+            <strong>Project</strong>
+            <button title="Optionen">⋮</button>
+            <button title="Minimieren">−</button>
+        </div>
+        <nav class="project-body" aria-label="Dateibaum">
+            <ul class="file-tree">
+                <li>
+                    <details open>
+                        <summary>editor</summary>
+                        <ul>
+                            <li><div class="file-tree-file">app.sic</div></li>
+                            <li>
+                                <details open>
+                                    <summary>frontend</summary>
+                                    <ul>
+                                        <li><div class="file-tree-file active">app.sic</div></li>
+                                    </ul>
+                                </details>
+                            </li>
+                            <li>
+                                <details open>
+                                    <summary>backend</summary>
+                                    <ul>
+                                        <li><div class="file-tree-file">effects.sic</div></li>
+                                    </ul>
+                                </details>
+                            </li>
+                            <li><div class="file-tree-file markdown">README.md</div></li>
+                        </ul>
+                    </details>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <section class="editor-panel">
+        <div class="tabs">
+            <div class="editor-tab">
+                <span class="sic-icon">S</span>
+                <span>app.sic</span>
+                <span class="close">×</span>
+            </div>
+        </div>
+        <div class="editor-canvas">
+            <div class="line-numbers" aria-hidden="true">1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24</div>
+            <textarea
+                class="source-editor"
+                aria-label="SIC-Quelltext"
+                spellcheck="false"
+                sic:bind-value="{source}"
+                sic:oninput="{next => source <- next}"
+            >{source: String}</textarea>
+        </div>
+    </section>
+
+    <aside class="tool-stripe right" aria-label="Rechte Werkzeugfenster">
+        <button title="Notifications">◉</button>
+        <button title="Database">▤</button>
+        <span class="spacer"></span>
+        <button title="AI Assistant">✦</button>
+    </aside>
+
+    <footer class="statusbar">
+        <span class="path">editor</span>
+        <span class="path-separator">›</span>
+        <span class="path">frontend</span>
+        <span class="path-separator">›</span>
+        <span class="path">app.sic</span>
+        <span class="status-spacer"></span>
+        <span>Ln 1, Col 1</span>
+        <span>LF</span>
+        <span>UTF-8</span>
+        <span>4 spaces</span>
+        <span>SIC</span>
+    </footer>
+</main>
+"""
+
+var source: String = "goal greeting: String = prefix + name\nlet prefix = \"Hallo \"\nlet name = \"SIC\""
