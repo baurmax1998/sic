@@ -85,6 +85,13 @@ class Binary(Expr):
 
 
 @dataclass(frozen=True)
+class Assignment(Expr):
+    """Schreibt eine langlebige ``var``-Bindung einer Auswertungsinstanz."""
+    name: str
+    value: Expr
+
+
+@dataclass(frozen=True)
 class IfExpr(Expr):
     condition: Expr
     then_branch: Expr
@@ -192,6 +199,7 @@ class Binding:
     value: Expr
     annotation: TypeRef | None = None
     is_goal: bool = False
+    is_var: bool = False
     span: SourceSpan | None = field(default=None, kw_only=True)
 
 

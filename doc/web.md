@@ -141,44 +141,45 @@ Zusätzlich unterstützt der Klebecode:
 In mehrzeiligen SIC-String-Buildern müssen literale JavaScript- und
 CSS-Klammern als `{{` und `}}` geschrieben werden.
 
-## Deklarative Apps
+## Reaktive Views und Komponenten
 
-Alternativ zu `Page::web` kann eine Frontend-Datei direkt `View::web` liefern.
-Der Build verwendet dann `index.html` und den Projekttitel. Views werden
-unmittelbar zusammengesetzt; eigene State-, Action- oder Funktionsdeklarationen
-sind nicht nötig:
+Alternativ zu `Page::web` liefert eine Frontend-Datei direkt `View::web`. Der
+Build verwendet dann `index.html` und den Projekttitel. Konkrete Elemente sind
+keine Python-Komponenten: Sie werden als sichere `Component::web`-String-Builder
+in SIC definiert. Primitive Interpolationen werden maskiert, Komponenten sicher
+eingebettet.
 
 ```sic
-goal view: View::web =
-    Column::web([
-        Input::web(
-            placeholder: "Neue Aufgabe",
-            on_submit: title => createTodo::backend(id: nextId, title: title)
-        ),
-        ListView::web(todos.map(todo =>
-            Row::web([
-                Checkbox::web(
-                    todo.done,
-                    on_change: _ => toggleTodo::backend(id: todo.id)
-                ),
-                Text::web(todo.title),
-                Button::web(
-                    "Löschen",
-                    on_click: _ => deleteTodo::backend(id: todo.id)
-                )
-            ])
-        ))
-    ])
-
-let todos = listTodos::backend()
-let nextId = todos.count() + 1
+goal input: Component::web = """
+<input
+    value="{value: String}"
+    sic:bind-value="{value}"
+    sic:oninput="{on_change}"
+>
+"""
 ```
 
-Event-Lambdas werden beim Build als Browseraktionen erfasst, nicht ausgeführt.
-Eine aktive View hält eine WebSocket-Verbindung. Darüber laufen sowohl ihre
-Aktionen als auch reaktive Aktualisierungen. Passende Effektmeldungen markieren
-die View als veraltet; die Runtime wertet sie neu aus und ersetzt den
-View-Wurzelknoten, einschließlich aktualisierter Event-Bindungen.
+Eine View kann pro Verbindung langlebige Variablen besitzen:
+
+```sic
+goal view: View::web = """
+<main>
+    {input::frontend(value: draft, on_change: next => draft <- next)}
+    {preview::frontend(title: draft)}
+    {todoList::frontend(todos: todos)}
+</main>
+"""
+
+var draft: String = ""
+let todos = listTodos::backend()
+```
+
+`var` wird einmal pro View-Instanz initialisiert. `<-` invalidiert über den
+Abhängigkeitsgraphen nur die verwendenden Komponenten. Die auslösende
+`sic:bind-value`-Kante ist bereits im Browser aktuell und wird ausgelassen.
+Passende Effects invalidieren weiterhin ihre Berechnungen; anschließend werden
+logische Komponenten statt einzelner DOM-Knoten ersetzt. Details und
+Lebenszyklusregeln stehen in `web-reactivity.md`.
 
 ## Backend-Aufrufe
 

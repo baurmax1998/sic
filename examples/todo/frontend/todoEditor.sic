@@ -1,0 +1,12 @@
+goal todoEditor: Component::web = """
+<form class="todo-editor" sic:onsubmit="{on_submit}">
+    <input
+        name="title"
+        placeholder="Neue Aufgabe"
+        value="{value: String}"
+        sic:bind-value="{value}"
+        sic:oninput="{on_change}"
+    >
+    <button type="submit">Speichern</button>
+</form>
+"""

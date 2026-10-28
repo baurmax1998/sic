@@ -7,7 +7,7 @@ goal createTodo: Todo =
 let saved = write_json::files::std(updated, "backend/todos.json")
 let updated: List<Todo> = todos + [todo]
 let todos = read_json::files::std("backend/todos.json")
-let todo = {id: nextId, title: """Hallo {title: String}""", done: false}
+let todo = {id: nextId, title: """Hallo Welt: {title: String}""", done: false}
 let nextId =
     (todos
         .map(todo => todo.id: Int)

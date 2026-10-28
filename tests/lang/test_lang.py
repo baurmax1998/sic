@@ -1,8 +1,8 @@
 import pytest
 
 from sic.lang import (
-    INT, STRING, FunctionType, LangDependencyError, LangTypeError, ListType,
-    ModuleRegistry, RecordType, compile_program, run,
+    INT, STRING, Evaluator, FunctionType, LangDependencyError, LangTypeError,
+    ListType, ModuleRegistry, RecordType, compile_program, run, standard_registry,
 )
 
 
@@ -57,21 +57,33 @@ Du hast {messages.count()} Nachrichten.
     )
 
 
-def test_declarative_web_app_with_mapped_views_and_event_lambdas():
+def test_declarative_web_view_uses_safe_string_builder():
     source = '''
-    goal view: View::web = Column::web([
-        Input::web(placeholder: "Neu", on_submit: title => true),
-        ListView::web(todos.map(todo => Row::web([
-            Checkbox::web(todo.done, on_change: _ => true),
-            Text::web(todo.title),
-            Button::web("Löschen", on_click: _ => true)
-        ])))
-    ])
-    let todos = [{title: "Test", done: false}]
+    goal view: View::web = """
+    <main><h1>{title}</h1><button sic:onclick="{_ => true}">OK</button></main>
+    """
+    let title = "Test & SIC"
     '''
     result = run(source).value
-    assert "sic-column" in result
-    assert "Test" in result
+    assert "<main>" in result.html
+    assert "Test&#32;&amp;&#32;SIC" in result.html
+
+
+def test_component_builder_escapes_values_and_var_event_updates_state():
+    source = '''
+    goal view: View::web = """<p>{draft}</p><input sic:oninput="{next => draft <- next}">"""
+    var draft: String = "<unsafe>"
+    '''
+    registry = standard_registry()
+    checked = compile_program(source, registry)
+    evaluator = Evaluator(checked, registry)
+    first = evaluator.run().value
+    assert first.html.startswith("<p>&lt;unsafe&gt;</p>")
+
+    handler = next(iter(evaluator.web_context.handlers.values()))
+    handler.callback("A & B")
+    updated = Evaluator(checked, registry, state=evaluator.state).run().value
+    assert "A&#32;&amp;&#32;B" in updated.html
 
 
 def test_if_fold_and_forward_function():

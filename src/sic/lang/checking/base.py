@@ -35,6 +35,9 @@ class TypeCheckerBase:
         self.void_effects: set[tuple[str, ...]] = set()
         self.ignore_effects: set[tuple[str, ...]] = set()
         self.completion_dependencies: set[str] = set()
+        self.variable_names: set[str] = set()
+        self.web_builders: dict[int, str] = {}
+        self.event_result_variables: set[int] = set()
         self.program: ast.Program | None = None
 
     def fresh(self) -> TypeVariable:
@@ -71,11 +74,12 @@ class TypeCheckerBase:
         if not program.bindings:
             return CheckedProgram(
                 program, {}, dict(self.records), {}, {}, {}, {}, {}, (), {}, (),
-                frozenset(), frozenset(), frozenset(),
+                frozenset(), frozenset(), frozenset(), frozenset(), {},
             )
         check_definition_order(program)
         check_dependency_cycles(program)
         self.program = program
+        self.variable_names = {binding.name for binding in program.bindings if binding.is_var}
         # Deklarationsannotationen werden absichtlich noch nicht angewandt:
         # Frühere Verwendungen dürfen den Typ zuerst festlegen. So kann eine
         # spätere, redundante Annotation zuverlässig erkannt werden.
@@ -94,7 +98,8 @@ class TypeCheckerBase:
                     declared = self.from_ref(binding.annotation)
                     existing = prune(expected)
                     if (
-                        self.is_fully_resolved(existing)
+                        not binding.is_var
+                        and self.is_fully_resolved(existing)
                         and format_type(existing) == format_type(declared)
                     ):
                         raise LangTypeError(
@@ -109,6 +114,11 @@ class TypeCheckerBase:
                 if span is not None:
                     exc.attach(span.start, span.end)
                 raise
+        goal_type = prune(self.bindings[program.goal.name])
+        if self.variable_names and not (
+            isinstance(goal_type, Primitive) and goal_type.name == "View::web"
+        ):
+            raise LangTypeError("var-Bindungen sind nur in einer View::web erlaubt")
         self.prepare_effects(program)
         for name, type_ in {**self.bindings, **self.inputs}.items():
             self.require_resolved(type_, name, set())
@@ -118,6 +128,7 @@ class TypeCheckerBase:
             dict(self.captures), tuple(self.effect_outputs), dict(self.emit_effects),
             tuple(self.listeners), frozenset(self.void_effects),
             frozenset(self.ignore_effects), frozenset(self.completion_dependencies),
+            frozenset(self.variable_names), dict(self.web_builders),
         )
 
     def resolve_effect_name(self, name: ast.Name) -> EffectSpec:
@@ -355,6 +366,8 @@ class TypeCheckerBase:
             return
         seen.add(id(type_))
         if isinstance(type_, TypeVariable):
+            if type_.identifier in self.event_result_variables:
+                return
             raise LangTypeError(f"Typ von {context!r} ist nicht eindeutig; Annotation erforderlich")
         if isinstance(type_, ListType):
             self.require_resolved(type_.element, context, seen)

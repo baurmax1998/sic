@@ -124,7 +124,7 @@ def test_web_project_uses_declared_sources_and_backend_registry(tmp_path: Path):
         'goal greeting: String = "Hallo " + (name: String)\n', encoding="utf-8"
     )
     (tmp_path / "frontend" / "app.sic").write_text(
-        'goal view: View::web = Text::web(greeting::backend(name: "SIC"))\n',
+        'goal view: View::web = """{greeting::backend(name: "SIC")}"""\n',
         encoding="utf-8",
     )
     # Auch noch nicht in app.sic deklarierte SIC-Dateien gehören zur Codebasis.
@@ -142,12 +142,11 @@ def test_web_project_uses_declared_sources_and_backend_registry(tmp_path: Path):
         "frontend/app.i",
         "unused.i",
         "web/App.i",
-        "web/Text.i",
         "web/View.i",
     } <= relative
     assert "backend/greeting.i" not in relative
-    assert "package web.Text;" in (
-        tmp_path / ".out" / "i" / "web" / "Text.i"
+    assert "package web.View;" in (
+        tmp_path / ".out" / "i" / "web" / "View.i"
     ).read_text(encoding="utf-8")
     app_interface = (
         tmp_path / ".out" / "i" / "web" / "App.i"

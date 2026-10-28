@@ -1,0 +1,5 @@
+goal todoList: Component::web = """
+<div class="todo-list">
+    {todos.map(todo => todoItem::frontend(todo: todo))}
+</div>
+"""

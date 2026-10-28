@@ -21,6 +21,9 @@ def expression_names(expression: ast.Expr, local: frozenset[str] = frozenset()) 
         return set() if expression.origin or expression.name in local else {expression.name}
     if isinstance(expression, ast.Lambda):
         return expression_names(expression.body, local | frozenset(expression.parameters))
+    if isinstance(expression, ast.Assignment):
+        target = set() if expression.name in local else {expression.name}
+        return target | expression_names(expression.value, local)
     if isinstance(expression, ast.LocalLet):
         return (
             expression_names(expression.value, local)

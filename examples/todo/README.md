@@ -29,7 +29,11 @@ gemeinsam verwendete Teilbäume sind mit `shared` markiert.
 ```text
 app.sic                 # Webprojekt und Routen
 frontend/
-  app.sic               # deklarative App::web
+  app.sic               # reaktive View::web
+  todoEditor.sic        # in SIC definierte Component::web
+  todoPreview.sic
+  todoList.sic
+  todoItem.sic
 backend/
   effects.sic
   list_todos.sic
@@ -44,15 +48,16 @@ Das typisierte `App::web` in `app.sic` enthält nur `port`, `pages` und
 `backend: "backend"`. Alle SIC-Dateien unter `backend/` werden automatisch als
 Backend-Paket entdeckt; `actions`, `modules` und HTTP-Endpunkte müssen nicht
 registriert werden. Host, Titel und Ausgabeordner entstehen automatisch.
-`frontend/app.sic` liefert direkt `View::web`; dort ist nur die sichtbare
-Todo-Liste eine Datenabhängigkeit. Die nächste ID wird beim Erstellen im Backend
-aus dem aktuellen Datenbestand bestimmt. Die Todo-Zeilen entstehen mit `map`;
-Event-Lambdas rufen unmittelbar die Goals aus dem Paket `backend` auf. Die Aktionen
-melden `Todos::effects::backend`; `listTodos` hört auf diesen fachlichen Effekt.
-Aktive Views werden daraufhin über WebSocket neu ausgewertet, ohne Seiten-Reload.
-Auch Änderungen an der Frontend-Datei oder an statisch erreichbaren
-Backend-Dateien lösen im Entwicklungsserver automatisch eine Neuberechnung aus.
+`frontend/app.sic` liefert direkt `View::web`. Editor, Vorschau, Liste und
+Todo-Zeile sind sichere `Component::web`-String-Builder und vollständig in SIC
+definiert. Eingefügte Werte werden automatisch HTML-maskiert.
 
-Die UI verwendet die Standardbibliothekstypen `App::web` und `View::web` sowie
-`Column::web`, `Input::web`, `ListView::web`, `Row::web`, `Checkbox::web`,
-`Text::web` und `Button::web`.
+Die View-Variable `draft` wird über `sic:oninput` und `<-` aktualisiert. Der
+Abhängigkeitsgraph ersetzt daraufhin nur die Vorschau-Komponente; die auslösende
+`sic:bind-value`-Kante des Inputs gilt bereits als aktuell, damit Fokus und
+Cursor erhalten bleiben. Die Todo-Zeilen entstehen mit `map`; ihre Event-Lambdas
+rufen die Goals aus dem Paket `backend` auf. Die Aktionen melden
+`Todos::effects::backend`, und `listTodos` hört auf diesen fachlichen Effect.
+Aktive Views aktualisieren dadurch ihre logischen Komponenten über WebSocket.
+Auch Änderungen an erreichbaren Quellen lösen im Entwicklungsserver eine
+Neuberechnung aus. Das vollständige Modell beschreibt `doc/web-reactivity.md`.

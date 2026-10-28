@@ -1,31 +1,17 @@
-goal view: View::web =
-    Column::web([
-            Text::web("hallo todo app nutzer um tolle sachen "),
-            Input::web(
-                placeholder: "Neue Aufgabe",
-                on_submit: title =>
-                    createTodo::backend(title: title)
-            ),
+goal view: View::web = """
+<main class="todo-app">
+    <h1>Todo SIC</h1>
+    {todoEditor::frontend(
+        value: draft,
+        on_change: next => draft <- next,
+        on_submit: _ =>
+            let created = createTodo::backend(title: draft)
+            in draft <- ""
+    )}
+    {todoPreview::frontend(title: draft)}
+    {todoList::frontend(todos: todos)}
+</main>
+"""
 
-            ListView::web(
-                todos.map(todo =>
-                    Row::web([
-                        Checkbox::web(
-                            todo.done,
-                            on_change: _ =>
-                                toggleTodo::backend(id: todo.id)
-                        ),
-
-                        Text::web(todo.title),
-
-                        Button::web(
-                            "Löschen",
-                            on_click: _ =>
-                                deleteTodo::backend(id: todo.id)
-                        )
-                    ])
-                )
-            )
-        ])
-
+var draft: String = ""
 let todos = listTodos::backend()

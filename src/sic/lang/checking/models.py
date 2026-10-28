@@ -40,6 +40,8 @@ class CheckedProgram:
     void_effects: frozenset[tuple[str, ...]]
     ignore_effects: frozenset[tuple[str, ...]]
     completion_dependencies: frozenset[str]
+    variable_names: frozenset[str]
+    web_builders: dict[int, str]
 
     def type_of(self, name: str) -> str:
         return format_type(self.bindings[name])

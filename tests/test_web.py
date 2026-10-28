@@ -82,6 +82,7 @@ def test_sic_web_config_and_static_build(tmp_path):
     assert "window.sic = {call, actions: definitions}" in document
     assert '"greet":{"transport":"websocket"}' in document
     assert 'console.info("[SIC] Aktion gesendet"' in document
+    assert 'closestSicHandler(event.target, "sic:oninput")' in document
 
 
 def test_web_goal_requires_standard_library_type(tmp_path):
@@ -136,7 +137,7 @@ def test_websocket_recomputes_live_view_after_file_effect(tmp_path):
         encoding="utf-8",
     )
     (tmp_path / "page.sic").write_text(
-        'goal view: View::web = Text::web(read_text::files::std("value.txt"))',
+        'goal view: View::web = """{read_text::files::std("value.txt")}"""',
         encoding="utf-8",
     )
     (backend / "set_value.sic").write_text(
@@ -159,6 +160,137 @@ def test_websocket_recomputes_live_view_after_file_effect(tmp_path):
             assert websocket.receive_json() == {"type": "replace", "html": "nachher"}
 
 
+def test_frontend_var_updates_only_dependent_component_and_keeps_origin(tmp_path):
+    backend = tmp_path / "backend"
+    frontend = tmp_path / "frontend"
+    backend.mkdir()
+    frontend.mkdir()
+    config_path = tmp_path / "app.sic"
+    config_path.write_text(
+        '''
+        goal app: App::web = {
+            port: 8000,
+            pages: ["frontend/app.sic"],
+            backend: "backend"
+        }
+        ''',
+        encoding="utf-8",
+    )
+    (backend / "ready.sic").write_text(
+        'goal ready: Bool = true', encoding="utf-8"
+    )
+    (frontend / "input.sic").write_text(
+        '''
+        goal input: Component::web = """
+        <form sic:onsubmit="{submit}">
+            <input name="value" value="{value: String}" sic:bind-value="{value}" sic:oninput="{change}">
+        </form>
+        """
+        ''',
+        encoding="utf-8",
+    )
+    (frontend / "preview.sic").write_text(
+        'goal preview: Component::web = """<p>{value: String}</p>"""',
+        encoding="utf-8",
+    )
+    (frontend / "app.sic").write_text(
+        '''
+        goal view: View::web = """
+        {input::frontend(
+            value: draft,
+            change: next => draft <- next,
+            submit: _ => draft <- ""
+        )}
+        {preview::frontend(value: draft)}
+        """
+        var draft: String = ""
+        ''',
+        encoding="utf-8",
+    )
+
+    app = create_app(config_path)
+    with TestClient(app) as client:
+        with client.websocket_connect("/__sic_ws?page=/") as websocket:
+            initial = websocket.receive_json()
+            assert initial["type"] == "replace"
+            import re
+            handler = re.search(r'sic:oninput="([^"]+)"', initial["html"]).group(1)
+            input_component = re.search(
+                r'data-sic-component="([^"]+)"', initial["html"]
+            ).group(1)
+            websocket.send_json({
+                "type": "event", "handler": handler, "value": "A & B",
+            })
+            update = websocket.receive_json()
+            assert update["type"] == "replace-component"
+            assert update["component"] != input_component
+            assert "A&#32;&amp;&#32;B" in update["html"]
+
+            submit = re.search(r'sic:onsubmit="([^"]+)"', initial["html"]).group(1)
+            websocket.send_json({
+                "type": "event", "handler": submit, "value": "A & B",
+            })
+            cleared = websocket.receive_json()
+            assert cleared["type"] == "replace-component"
+            assert cleared["component"] == input_component
+            assert 'value=""' in cleared["html"]
+
+
+def test_backend_effect_replaces_only_dependent_component(tmp_path):
+    backend = tmp_path / "backend"
+    frontend = tmp_path / "frontend"
+    backend.mkdir()
+    frontend.mkdir()
+    config_path = tmp_path / "app.sic"
+    config_path.write_text(
+        '''
+        goal app: App::web = {
+            port: 8000,
+            pages: ["frontend/app.sic"],
+            backend: "backend"
+        }
+        ''', encoding="utf-8",
+    )
+    (backend / "set_value.sic").write_text(
+        'goal setValue: Bool = write_text::files::std(value: String, "value.txt")',
+        encoding="utf-8",
+    )
+    (frontend / "button.sic").write_text(
+        '''
+        goal button: Component::web = """
+        <button sic:onclick="{_ => setValue::backend(value: "nachher")}">Setzen</button>
+        """
+        ''', encoding="utf-8",
+    )
+    (frontend / "display.sic").write_text(
+        'goal display: Component::web = """<p>{value: String}</p>"""',
+        encoding="utf-8",
+    )
+    (frontend / "app.sic").write_text(
+        '''
+        goal view: View::web = """
+        {button::frontend()}{display::frontend(value: content)}
+        """
+        let content = read_text::files::std("value.txt")
+        ''', encoding="utf-8",
+    )
+    (tmp_path / "value.txt").write_text("vorher", encoding="utf-8")
+
+    app = create_app(config_path)
+    with TestClient(app) as client:
+        with client.websocket_connect("/__sic_ws?page=/") as websocket:
+            initial = websocket.receive_json()
+            assert initial["type"] == "replace"
+            import re
+            handler = re.search(r'sic:onclick="([^"]+)"', initial["html"]).group(1)
+            websocket.send_json({
+                "type": "event", "handler": handler, "value": True,
+            })
+            update = websocket.receive_json()
+            assert update["type"] == "replace-component"
+            assert "nachher" in update["html"]
+
+
 def test_all_backend_goals_are_discovered_as_websocket_actions(tmp_path):
     backend = tmp_path / "backend"
     backend.mkdir()
@@ -174,7 +306,7 @@ def test_all_backend_goals_are_discovered_as_websocket_actions(tmp_path):
         encoding="utf-8",
     )
     (tmp_path / "page.sic").write_text(
-        'goal view: View::web = Text::web("bereit")', encoding="utf-8"
+        'goal view: View::web = """bereit"""', encoding="utf-8"
     )
     for name in ("createValue", "updateValue", "deleteValue"):
         (backend / f"{name}.sic").write_text(

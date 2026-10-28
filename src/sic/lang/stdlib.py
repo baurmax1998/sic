@@ -72,74 +72,12 @@ def standard_registry(root: str | Path | None = None) -> ModuleRegistry:
         return opening + "".join(children) + f"</{tag}>"
 
     view_type = Primitive("View::web")
+    component_type = Primitive("Component::web")
     app_type = RecordType("App::web", {
         "port": INT,
         "pages": ListType(STRING),
         "backend": STRING,
     }, closed=True)
-
-    def column(children: list[str]) -> str:
-        return '<div class="sic-column">' + "".join(children) + "</div>"
-
-    def row(children: list[str]) -> str:
-        return '<div class="sic-row">' + "".join(children) + "</div>"
-
-    def list_view(children: list[str]) -> str:
-        return '<div class="sic-list">' + "".join(children) + "</div>"
-
-    def action_attributes(callback: Any, argument: Any) -> tuple[str, str]:
-        factory = getattr(callback, "action_descriptor", None)
-        if factory is None:
-            return "", ""
-        descriptor = factory(argument)
-        if not isinstance(descriptor, dict) or "__sic_action__" not in descriptor:
-            return "", ""
-        name = html.escape(str(descriptor["__sic_action__"]), quote=True)
-        arguments = descriptor.get("arguments", {})
-        static = {
-            key: value for key, value in arguments.items()
-            if value != "__sic_event_value__"
-        }
-        encoded = html.escape(json.dumps(static, ensure_ascii=False), quote=True)
-        dynamic = next(
-            (key for key, value in arguments.items() if value == "__sic_event_value__"),
-            "value",
-        )
-        return f' data-sic-call="{name}" data-sic-args="{encoded}"', dynamic
-
-    def input_view(placeholder: str, on_submit: Any) -> str:
-        attributes, dynamic = action_attributes(on_submit, "__sic_event_value__")
-        # Formulare verwenden den existierenden Submit-Kleber; statische
-        # Lambda-Argumente werden als versteckte Felder mitgesendet.
-        action = attributes.replace("data-sic-call", "data-sic-submit")
-        action = action.split(' data-sic-args=', 1)[0]
-        factory = getattr(on_submit, "action_descriptor", None)
-        descriptor = factory("__sic_event_value__") if factory is not None else {}
-        if not isinstance(descriptor, dict):
-            descriptor = {}
-        hidden = "".join(
-            f'<input type="hidden" name="{html.escape(str(key), quote=True)}" '
-            f'value="{html.escape(str(value), quote=True)}">'
-            for key, value in descriptor.get("arguments", {}).items()
-            if value != "__sic_event_value__"
-        )
-        dynamic = dynamic or "value"
-        return (
-            f'<form class="sic-input"{action}>{hidden}<input name="{dynamic}" placeholder="'
-            + html.escape(placeholder, quote=True)
-            + '"></form>'
-        )
-
-    def checkbox(checked: bool, on_change: Any) -> str:
-        attributes, _ = action_attributes(on_change, checked)
-        return '<input type="checkbox"' + (" checked" if checked else "") + attributes + ">"
-
-    def text_view(value: str) -> str:
-        return html.escape(value, quote=True)
-
-    def button(label: str, on_click: Any) -> str:
-        attributes, _ = action_attributes(on_click, False)
-        return '<button type="button"' + attributes + ">" + html.escape(label, quote=True) + "</button>"
 
     file_changed = registry.register_effect(
         "FileChanged", ("files", "std"), STRING
@@ -185,6 +123,7 @@ def standard_registry(root: str | Path | None = None) -> ModuleRegistry:
     html_type = Primitive("Html::web")
     registry.register_type("Html", ("web",), html_type)
     registry.register_type("View", ("web",), view_type)
+    registry.register_type("Component", ("web",), component_type)
     registry.register_type("App", ("web",), app_type)
     registry.register_type(
         "Page", ("web",),
@@ -196,38 +135,6 @@ def standard_registry(root: str | Path | None = None) -> ModuleRegistry:
             "js": STRING,
         }, closed=True),
     )
-    event_result = TypeVariable(-3)
-    registry.register(
-        "Column", ("web",), FunctionType([ListType(view_type)], view_type),
-        column, ("children",),
-    )
-    registry.register(
-        "Row", ("web",), FunctionType([ListType(view_type)], view_type),
-        row, ("children",),
-    )
-    registry.register(
-        "ListView", ("web",), FunctionType([ListType(view_type)], view_type),
-        list_view, ("children",),
-    )
-    registry.register(
-        "Input", ("web",),
-        FunctionType([STRING, FunctionType([STRING], event_result)], view_type),
-        input_view, ("placeholder", "on_submit"),
-    )
-    registry.register(
-        "Checkbox", ("web",),
-        FunctionType([BOOL, FunctionType([BOOL], event_result)], view_type),
-        checkbox, ("checked", "on_change"),
-    )
-    registry.register(
-        "Text", ("web",), FunctionType([STRING], view_type), text_view, ("value",),
-    )
-    registry.register(
-        "Button", ("web",),
-        FunctionType([STRING, FunctionType([BOOL], event_result)], view_type),
-        button, ("label", "on_click"),
-    )
-
     # Web-Bausteine haben kurze, eindeutige Namen. Die längeren Pfade bleiben
     # vorerst als kompatible Aliase bestehen.
     for origin in (("web",), ("html", "web")):

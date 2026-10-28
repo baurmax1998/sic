@@ -1,0 +1,16 @@
+goal todoItem: Component::web =
+    if todo.done
+    then """
+        <div class="todo-row">
+            <input type="checkbox" checked sic:oncheck="{_ => toggleTodo::backend(id: todo.id)}">
+            <span>{todo.title: String}</span>
+            <button type="button" sic:onclick="{_ => deleteTodo::backend(id: todo.id)}">Löschen</button>
+        </div>
+    """
+    else """
+        <div class="todo-row">
+            <input type="checkbox" sic:oncheck="{_ => toggleTodo::backend(id: todo.id)}">
+            <span>{todo.title: String}</span>
+            <button type="button" sic:onclick="{_ => deleteTodo::backend(id: todo.id)}">Löschen</button>
+        </div>
+    """

@@ -23,6 +23,7 @@ from .lang import (
 from .lang import ast
 from .lang.effects import EffectMessage, EffectSubscription
 from .lang.types import ListType, MapType, NullableType, Primitive, RecordType, Type, prune
+from .lang.web_values import WebValue
 
 
 logger = logging.getLogger("uvicorn.error.sic")
@@ -138,6 +139,7 @@ def load_web_config(path: str | Path = "app.sic") -> WebConfig:
 def _project_registry(
     root: Path, package: str,
     programs: tuple[BackendProgram, ...] | None = None,
+    *, include_frontend: bool = False,
 ):
     registry = standard_registry(root)
     active = programs if programs is not None else _discover_backend(root, package)
@@ -146,6 +148,30 @@ def _project_registry(
             program.module, package,
             program.source.read_text(encoding="utf-8"),
         )
+    if include_frontend:
+        frontend = (root / "frontend").resolve()
+        if frontend.is_dir():
+            frontend_programs = [
+                (source, source.read_text(encoding="utf-8"))
+                for source in frontend.rglob("*.sic")
+            ]
+            frontend_programs.sort(
+                key=lambda item: (
+                    bool(parse(item[1]).bindings), str(item[0])
+                )
+            )
+            for source, source_text in frontend_programs:
+                program = parse(source_text)
+                annotation = program.goal.annotation if program.bindings else None
+                if (
+                    annotation is not None and annotation.name in {"View", "Page"}
+                    and annotation.origin == ("web",)
+                ):
+                    continue
+                registry.register_source(
+                    program.goal.name if program.bindings else source.stem,
+                    "frontend", source_text,
+                )
     return registry
 
 
@@ -159,6 +185,13 @@ def _view_source_dependencies(
         program.module: program.source.resolve()
         for program in config.backend_programs
     }
+    frontend_by_module: dict[str, Path] = {}
+    frontend = (config.root / "frontend").resolve()
+    if frontend.is_dir():
+        for source in frontend.rglob("*.sic"):
+            program = parse(source.read_text(encoding="utf-8"))
+            if program.bindings:
+                frontend_by_module[program.goal.name] = source.resolve()
     dependencies: set[Path] = {page_source.resolve()}
     visited: set[tuple[int, str]] = set()
 
@@ -168,6 +201,10 @@ def _view_source_dependencies(
             if spec is not None:
                 if spec.origin and spec.origin[-1] == config.backend:
                     source = by_module.get(spec.origin[0])
+                    if source is not None:
+                        dependencies.add(source)
+                elif spec.origin and spec.origin[-1] == "frontend":
+                    source = frontend_by_module.get(spec.symbol)
                     if source is not None:
                         dependencies.add(source)
                 if spec.checked is not None:
@@ -329,13 +366,13 @@ class EffectHub:
     def __init__(self) -> None:
         self._views: dict[
             object, tuple[
-                tuple[EffectSubscription, ...], frozenset[Path], asyncio.Queue[None]
+                tuple[EffectSubscription, ...], frozenset[Path], asyncio.Queue[Any]
             ]
         ] = {}
 
     def replace(
         self, token: object, subscriptions: tuple[EffectSubscription, ...],
-        sources: frozenset[Path], queue: asyncio.Queue[None],
+        sources: frozenset[Path], queue: asyncio.Queue[Any],
     ) -> None:
         self._views[token] = (subscriptions, sources, queue)
         logger.debug(
@@ -361,7 +398,7 @@ class EffectHub:
                 subscription.matches(message)
                 for subscription in subscriptions for message in messages
             ) and queue.empty():
-                queue.put_nowait(None)
+                queue.put_nowait(messages)
                 matched += 1
         logger.info("[SIC] effects-matched views=%d", matched)
 
@@ -369,7 +406,7 @@ class EffectHub:
         matched = 0
         for _, sources, queue in tuple(self._views.values()):
             if sources & changed and queue.empty():
-                queue.put_nowait(None)
+                queue.put_nowait("source")
                 matched += 1
         logger.info(
             "[SIC] sources-changed files=%s matched_views=%d",
@@ -388,11 +425,10 @@ class SourceWatcher:
         self.snapshot = self._snapshot()
 
     def _paths(self) -> set[Path]:
-        backend_dir = (self.config.root / self.config.backend).resolve()
         return {
             self.config_path,
-            *(path.resolve() for path in self.config.pages),
-            *(path.resolve() for path in backend_dir.rglob("*.sic")),
+            *(path.resolve() for path in self.config.root.rglob("*.sic")
+              if self.config.output not in path.resolve().parents),
         }
 
     def _snapshot(self) -> dict[Path, tuple[int, int]]:
@@ -464,6 +500,18 @@ socket.addEventListener("message", event => {{
     document.getElementById("sic-diagnostic")?.remove();
     return;
   }}
+  if (message.type === "replace-component") {{
+    const current = [...document.querySelectorAll("[data-sic-component]")]
+      .find(node => node.getAttribute("data-sic-component") === message.component);
+    if (current) current.outerHTML = message.html;
+    return;
+  }}
+  if (message.type === "remove-component") {{
+    const current = [...document.querySelectorAll("[data-sic-component]")]
+      .find(node => node.getAttribute("data-sic-component") === message.component);
+    current?.remove();
+    return;
+  }}
   if (message.type === "diagnostic") {{
     console.error("[SIC] Compilerfehler", message.detail);
     let diagnostic = document.getElementById("sic-diagnostic");
@@ -501,7 +549,36 @@ function show(name, value) {{
     node.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   }});
 }}
+async function sendSicEvent(handler, value) {{
+  await socketReady;
+  socket.send(JSON.stringify({{type: "event", handler, value}}));
+}}
+function closestSicHandler(target, ...attributes) {{
+  let node = target instanceof Element ? target : null;
+  while (node) {{
+    if (attributes.some(attribute => node.hasAttribute(attribute))) return node;
+    node = node.parentElement;
+  }}
+  return null;
+}}
+document.addEventListener("input", event => {{
+  const reactive = closestSicHandler(event.target, "sic:oninput");
+  if (reactive) sendSicEvent(reactive.getAttribute("sic:oninput"), reactive.value);
+}});
+document.addEventListener("change", event => {{
+  const target = closestSicHandler(event.target, "sic:onchange", "sic:oncheck");
+  if (!target) return;
+  const handler = target.getAttribute("sic:onchange") || target.getAttribute("sic:oncheck");
+  sendSicEvent(handler, target.type === "checkbox" ? target.checked : target.value);
+}});
 document.addEventListener("submit", async event => {{
+  const reactive = closestSicHandler(event.target, "sic:onsubmit");
+  if (reactive) {{
+    event.preventDefault();
+    const values = [...new FormData(reactive).values()];
+    sendSicEvent(reactive.getAttribute("sic:onsubmit"), values[0] || "");
+    return;
+  }}
   const form = event.target.closest("form[data-sic-submit]");
   if (!form) return;
   event.preventDefault();
@@ -517,6 +594,11 @@ document.addEventListener("submit", async event => {{
   }}
 }});
 document.addEventListener("click", async event => {{
+  const reactive = closestSicHandler(event.target, "sic:onclick");
+  if (reactive) {{
+    sendSicEvent(reactive.getAttribute("sic:onclick"), true);
+    return;
+  }}
   const button = event.target.closest("[data-sic-call]");
   if (!button) return;
   const name = button.dataset.sicCall;
@@ -537,7 +619,8 @@ def build_web(config_path: str | Path = "app.sic") -> list[Path]:
     runtime = _browser_runtime(config.backend_programs)
     for source_path in config.pages:
         registry = _project_registry(
-            config.root, config.backend, config.backend_programs
+            config.root, config.backend, config.backend_programs,
+            include_frontend=True,
         )
         checked = compile_program(source_path.read_text(encoding="utf-8"), registry)
         page_type = prune(checked.bindings[checked.program.goal.name])
@@ -549,7 +632,7 @@ def build_web(config_path: str | Path = "app.sic") -> list[Path]:
             )
         value = Evaluator(checked, registry).run().value
         if is_view:
-            page = {"html": value}
+            page = {"html": value.html if isinstance(value, WebValue) else value}
         elif isinstance(value, dict):
             page = value
         else:
@@ -634,15 +717,26 @@ def create_app(config_path: str | Path = "app.sic"):
     app.router.add_event_handler("startup", start_source_watcher)
     app.router.add_event_handler("shutdown", stop_source_watcher)
 
-    def evaluate_live_page(pathname: str):
+    def evaluate_live_page(
+        pathname: str, state: dict[str, Any] | None = None,
+        compiled: tuple[Path, Any, Any] | None = None,
+    ):
         wanted = pathname.lstrip("/") or "index.html"
-        for source_path in config.pages:
-            registry = _project_registry(
-                config.root, config.backend, config.backend_programs
-            )
-            checked = compile_program(source_path.read_text(encoding="utf-8"), registry)
+        candidates = [compiled] if compiled is not None else [
+            (source_path, None, None) for source_path in config.pages
+        ]
+        for source_path, checked, registry in candidates:
+            if checked is None or registry is None:
+                registry = _project_registry(
+                    config.root, config.backend, config.backend_programs,
+                    include_frontend=True,
+                )
+                checked = compile_program(
+                    source_path.read_text(encoding="utf-8"), registry
+                )
+            evaluator = Evaluator(checked, registry, state=state)
             with execution_lock:
-                result = Evaluator(checked, registry).run()
+                result = evaluator.run()
             page_type = prune(checked.bindings[checked.program.goal.name])
             is_view = isinstance(page_type, Primitive) and page_type.name == "View::web"
             if is_view:
@@ -652,9 +746,14 @@ def create_app(config_path: str | Path = "app.sic"):
                 body = result.value.get("html", "")
             else:
                 continue
+            if isinstance(body, WebValue):
+                body = body.html
             if output == wanted:
                 sources = _view_source_dependencies(checked, source_path, config)
-                return body, result.subscriptions, sources
+                return (
+                    body, result.subscriptions, sources, evaluator,
+                    (source_path, checked, registry),
+                )
         raise ValueError(f"Unbekannte SIC-Seite: {pathname}")
 
     async def execute_socket_call(websocket, message: dict[str, Any]) -> None:
@@ -745,18 +844,28 @@ def create_app(config_path: str | Path = "app.sic"):
     async def live_updates(websocket):
         await websocket.accept()
         token = object()
-        queue: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
+        queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=1)
         pathname = websocket.query_params.get("page", "/")
+        state: dict[str, Any] = {}
+        compiled = None
+        current_evaluator = None
         logger.info(
             "[SIC] websocket-connected view=%s page=%s client=%s",
             hex(id(token)), pathname, websocket.client,
         )
 
-        async def refresh() -> None:
+        async def refresh(
+            *, full: bool, affected: set[str] | None = None,
+            recompile: bool = False,
+        ) -> None:
+            nonlocal compiled, current_evaluator
+            previous = current_evaluator
             try:
-                body, subscriptions, sources = await run_in_threadpool(
-                    evaluate_live_page, pathname
+                rendered = await run_in_threadpool(
+                    evaluate_live_page, pathname, state,
+                    None if recompile else compiled,
                 )
+                body, subscriptions, sources, evaluator, compiled = rendered
             except (LangError, OSError, ValueError) as exc:
                 logger.warning(
                     "[SIC] view-compile-error view=%s page=%s detail=%s",
@@ -766,12 +875,93 @@ def create_app(config_path: str | Path = "app.sic"):
                     "type": "diagnostic", "detail": str(exc),
                 })
                 return
+            current_evaluator = evaluator
             effect_hub.replace(token, subscriptions, sources, queue)
-            await websocket.send_json({"type": "replace", "html": body})
+            if full or previous is None or not previous.web_context.components:
+                await websocket.send_json({"type": "replace", "html": body})
+            else:
+                targets = affected or set(previous.web_context.components)
+                for component in sorted(targets):
+                    html_value = evaluator.web_context.components.get(component)
+                    if html_value is None:
+                        await websocket.send_json({
+                            "type": "remove-component", "component": component,
+                        })
+                    else:
+                        await websocket.send_json({
+                            "type": "replace-component", "component": component,
+                            "html": html_value,
+                        })
             logger.info(
                 "[SIC] view-rendered view=%s page=%s listeners=%d html_bytes=%d",
                 hex(id(token)), pathname, len(subscriptions), len(body.encode("utf-8")),
             )
+
+        async def execute_local_event(message: dict[str, Any]) -> None:
+            nonlocal current_evaluator
+            if current_evaluator is None:
+                return
+            identifier = message.get("handler")
+            handler = current_evaluator.web_context.handlers.get(identifier)
+            if handler is None:
+                await websocket.send_json({
+                    "type": "error", "id": str(identifier or ""),
+                    "detail": "Unbekannte oder veraltete SIC-Eventbindung",
+                })
+                return
+            event_evaluator = handler.evaluator
+            before = len(event_evaluator.messages)
+            current_evaluator.web_context.changed.clear()
+            try:
+                with execution_lock:
+                    handler.callback(message.get("value"))
+            except (LangError, OSError, ValueError) as exc:
+                await websocket.send_json({
+                    "type": "error", "id": str(identifier), "detail": str(exc),
+                })
+                return
+            changed = set(current_evaluator.web_context.changed)
+            context = current_evaluator.web_context
+            affected: set[str] = set()
+            for component, dependencies in context.dependencies.items():
+                if dependencies & changed:
+                    affected.add(component)
+            for component, dependencies in context.binding_dependencies.items():
+                relevant = dependencies & changed
+                origin_is_current = bool(relevant) and all(
+                    state.get(name) == message.get("value") for name in relevant
+                )
+                if relevant and (
+                    component != handler.component_id or not origin_is_current
+                ):
+                    affected.add(component)
+                elif relevant and context.dependencies.get(component, set()) & changed:
+                    affected.add(component)
+            produced = tuple(event_evaluator.messages[before:])
+            if changed and affected:
+                await refresh(full=False, affected=affected)
+            local_effects = tuple(
+                message for message in produced
+                if message.effect.identity[-1:] == ("frontend",)
+            )
+            external_effects = tuple(
+                message for message in produced if message not in local_effects
+            )
+            if local_effects:
+                local_targets: set[str] = set()
+                for subscription, component in context.effect_components:
+                    if any(subscription.matches(message) for message in local_effects):
+                        local_targets.add(component)
+                sources = {
+                    source for subscription, source in context.effect_sources
+                    if any(subscription.matches(message) for message in local_effects)
+                }
+                for component, dependencies in context.dependencies.items():
+                    if dependencies & sources:
+                        local_targets.add(component)
+                await refresh(full=False, affected=local_targets or None)
+            if external_effects:
+                effect_hub.publish(external_effects)
 
         initial_sources = frozenset({
             *(path.resolve() for path in config.pages),
@@ -779,7 +969,7 @@ def create_app(config_path: str | Path = "app.sic"):
         })
         effect_hub.replace(token, (), initial_sources, queue)
         try:
-            await refresh()
+            await refresh(full=True)
             while True:
                 update = asyncio.create_task(queue.get())
                 incoming = asyncio.create_task(websocket.receive())
@@ -789,7 +979,24 @@ def create_app(config_path: str | Path = "app.sic"):
                 for task in pending:
                     task.cancel()
                 if update in done:
-                    await refresh()
+                    reason = update.result()
+                    if reason == "source":
+                        await refresh(full=True, recompile=True)
+                    else:
+                        context = current_evaluator.web_context if current_evaluator else None
+                        targets: set[str] = set()
+                        sources: set[str] = set()
+                        if context is not None:
+                            for subscription, component in context.effect_components:
+                                if any(subscription.matches(message) for message in reason):
+                                    targets.add(component)
+                            for subscription, source in context.effect_sources:
+                                if any(subscription.matches(message) for message in reason):
+                                    sources.add(source)
+                            for component, dependencies in context.dependencies.items():
+                                if dependencies & sources:
+                                    targets.add(component)
+                        await refresh(full=False, affected=targets or None)
                 if incoming in done:
                     event = incoming.result()
                     if event.get("type") == "websocket.disconnect":
@@ -811,6 +1018,8 @@ def create_app(config_path: str | Path = "app.sic"):
                         continue
                     if isinstance(message, dict) and message.get("type") == "call":
                         await execute_socket_call(websocket, message)
+                    elif isinstance(message, dict) and message.get("type") == "event":
+                        await execute_local_event(message)
                     else:
                         await websocket.send_json({
                             "type": "error", "id": str(message.get("id", ""))

@@ -1,0 +1,9 @@
+goal todoPreview: Component::web =
+    if title == ""
+    then """"""
+    else """
+        <div class="todo-preview">
+            <strong>Vorschau:</strong>
+            <span>☐ {title: String}</span>
+        </div>
+    """

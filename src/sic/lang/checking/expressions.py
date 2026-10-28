@@ -1,6 +1,7 @@
 """Typinferenz für einzelne AST-Ausdrücke."""
 from __future__ import annotations
 from dataclasses import fields, is_dataclass
+import re
 from .. import ast
 from ..calculation import CalculationSpec, ErrorSpec
 from ..dependencies import check_definition_order, check_dependency_cycles
@@ -28,10 +29,38 @@ class ExpressionInferenceMixin:
             else:
                 result = STRING
         elif isinstance(expression, ast.StringBuilder):
+            expected_type = prune(expected) if expected is not None else None
+            web_kind = (
+                expected_type.name
+                if isinstance(expected_type, Primitive)
+                and expected_type.name in {"Component::web", "View::web"}
+                else None
+            )
+            previous = ""
             for part in expression.parts:
-                if isinstance(part, ast.Expr):
+                if isinstance(part, str):
+                    previous = part
+                    continue
+                if web_kind is not None:
+                    marker = previous.rstrip().rsplit("{", 1)[-1]
+                    if re.search(r'sic:on(?:input|change|submit)=["\']?$', marker):
+                        event_result = self.fresh()
+                        self.event_result_variables.add(event_result.identifier)
+                        self.infer(part, scope, FunctionType([STRING], event_result))
+                    elif re.search(r'sic:on(?:check|click)=["\']?$', marker):
+                        event_result = self.fresh()
+                        self.event_result_variables.add(event_result.identifier)
+                        self.infer(part, scope, FunctionType([BOOL], event_result))
+                    else:
+                        self.infer(part, scope)
+                else:
                     self.infer(part, scope)
-            result = STRING
+                previous = ""
+            if web_kind is not None:
+                self.web_builders[id(expression)] = web_kind
+                result = expected_type
+            else:
+                result = STRING
         elif isinstance(expression, ast.Name):
             if expression.origin:
                 if self.registry.has_calculation(expression.name, expression.origin):
@@ -97,6 +126,14 @@ class ExpressionInferenceMixin:
             result = wanted
         elif isinstance(expression, ast.Binary):
             result = self.infer_binary(expression, scope, expected)
+        elif isinstance(expression, ast.Assignment):
+            if expression.name not in self.variable_names:
+                raise LangTypeError(
+                    f"Nur eine var-Bindung darf mit '<-' verändert werden: {expression.name!r}"
+                )
+            target = self.bindings[expression.name]
+            self.infer(expression.value, scope, target)
+            result = target
         elif isinstance(expression, ast.IfExpr):
             self.infer(expression.condition, scope, BOOL)
             branch = expected or self.fresh()

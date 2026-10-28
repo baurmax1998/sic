@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Any
 from ..errors import LangRuntimeError
+from ..web_values import WebValue
 from ..types import (
     FunctionType, ListType, MapType, NullableType, Primitive, RecordType, Type,
     TypeVariable, format_type, prune,
@@ -21,8 +22,14 @@ def validate_runtime_value(value: Any, expected: Type, context: str = "value") -
             valid = type(value) is float
         elif expected.name == "Null":
             valid = value is None
-        elif expected.name in {"String", "Html::web", "View::web"}:
+        elif expected.name in {"String", "Html::web"}:
             valid = isinstance(value, str)
+        elif expected.name == "View::web":
+            valid = isinstance(value, (str, WebValue)) and (
+                not isinstance(value, WebValue) or value.kind == "View::web"
+            )
+        elif expected.name == "Component::web":
+            valid = isinstance(value, WebValue) and value.kind == "Component::web"
     elif isinstance(expected, NullableType):
         if value is None:
             return

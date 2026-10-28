@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ..ast import (
-    Annotation, Binary, Binding, BindingPattern, Call, CapturedCall, ErrorExpr,
+    Annotation, Assignment, Binary, Binding, BindingPattern, Call, CapturedCall, ErrorExpr,
     Expr, Field, IfExpr, Index, Lambda, ListExpr, Literal, LiteralPattern,
     EffectDeclaration, EffectSuppression, EmitDeclaration, ListenerDeclaration,
     LocalLet, MapExpr, MatchCase, MatchExpr, MethodCall, Name, NamedArgument,
@@ -13,8 +13,8 @@ from ..ast import (
 from ..errors import LangIncompleteError, LangSyntaxError
 from ..lexer import Token, lex
 
-_PRECEDENCE = {"??": 0, "or": 1, "and": 2, "==": 3, "!=": 3, "<": 3, "<=": 3,
-               ">": 3, ">=": 3, "+": 4, "-": 4, "*": 5, "/": 5, "%": 5}
+_PRECEDENCE = {"<-": 0, "??": 1, "or": 2, "and": 3, "==": 4, "!=": 4, "<": 4, "<=": 4,
+               ">": 4, ">=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6}
 
 class ParserCore:
     def __init__(self, source: str, allow_incomplete: bool = False):
@@ -96,10 +96,10 @@ class ParserCore:
                             EffectSuppression(effect, span)
                         )
                 continue
-            if keyword not in {"goal", "let"}:
+            if keyword not in {"goal", "let", "var"}:
                 if (
                     self.allow_incomplete
-                    and any(candidate.startswith(keyword) for candidate in ("goal", "let"))
+                    and any(candidate.startswith(keyword) for candidate in ("goal", "let", "var"))
                     and self.current.kind == "EOF"
                 ):
                     raise LangIncompleteError("'goal' oder 'let'")
@@ -130,7 +130,7 @@ class ParserCore:
             self.expect("=")
             value = self.parse_expression()
             bindings.append(Binding(
-                name, value, annotation, keyword == "goal",
+                name, value, annotation, keyword == "goal", keyword == "var",
                 span=SourceSpan(binding_start, self.current.offset),
             ))
         goals = sum(binding.is_goal for binding in bindings)
@@ -201,6 +201,11 @@ class ParserCore:
             if precedence < minimum:
                 break
             self.advance()
-            right = self.parse_expression(precedence + 1)
-            left = Binary(operator, left, right)
+            right = self.parse_expression(precedence if operator == "<-" else precedence + 1)
+            if operator == "<-":
+                if not isinstance(left, Name) or left.origin:
+                    raise LangSyntaxError("Links von '<-' muss eine lokale var-Bindung stehen", start)
+                left = Assignment(left.name, right)
+            else:
+                left = Binary(operator, left, right)
         return replace(left, span=SourceSpan(start, self.current.offset))
