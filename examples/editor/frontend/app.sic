@@ -13,8 +13,8 @@ goal editor: View::web = """
     button {{ color: inherit; }}
     .ide-shell {{
         display: grid;
-        grid-template-columns: 2.05rem 15rem minmax(30rem, 1fr) 2.05rem;
-        grid-template-rows: minmax(0, 1fr) 1.55rem;
+        grid-template-columns: 2.05rem 15rem minmax(30rem, 1fr) 15rem 2.05rem;
+        grid-template-rows: minmax(0, 1fr) 0 1.55rem;
         width: 100vw;
         height: 100vh;
         background: #2b2b2b;
@@ -28,8 +28,8 @@ goal editor: View::web = """
         background: #3c3f41;
         border-color: #515151;
     }}
-    .tool-stripe.left {{ border-right: 1px solid #515151; }}
-    .tool-stripe.right {{ border-left: 1px solid #515151; }}
+    .tool-stripe.left {{ grid-column: 1; grid-row: 1 / 3; border-right: 1px solid #515151; }}
+    .tool-stripe.right {{ grid-column: 5; grid-row: 1 / 3; border-left: 1px solid #515151; }}
     .tool-stripe button {{
         display: grid;
         place-items: center;
@@ -39,7 +39,7 @@ goal editor: View::web = """
         border: 0;
         background: transparent;
         color: #a7a7a7;
-        cursor: default;
+        cursor: pointer;
         font-size: 0.9rem;
     }}
     .tool-stripe button:hover {{ background: #4b4d4f; color: #e8e8e8; }}
@@ -48,15 +48,32 @@ goal editor: View::web = """
         color: #f0f0f0;
         box-shadow: inset 2px 0 #589df6;
     }}
+    .tool-stripe.right button.active {{ box-shadow: inset -2px 0 #589df6; }}
     .tool-stripe .spacer {{ flex: 1; }}
-    .project-panel {{
-        display: grid;
-        grid-template-rows: 2.2rem minmax(0, 1fr);
+    .project-panel, .right-panel {{
         min-width: 0;
         min-height: 0;
+        overflow: hidden;
         background: #3c3f41;
-        border-right: 1px solid #515151;
     }}
+    .project-panel {{ grid-column: 2; grid-row: 1; border-right: 1px solid #515151; }}
+    .right-panel {{ grid-column: 4; grid-row: 1; border-left: 1px solid #515151; }}
+    .tool-content {{
+        display: none;
+        grid-template-rows: 2.2rem minmax(0, 1fr);
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+    }}
+    .left-project .project-content,
+    .left-structure .structure-content,
+    .left-commit .commit-content,
+    .right-notifications .notifications-content,
+    .right-database .database-content,
+    .right-ai .ai-content {{ display: grid; }}
+    .ide-shell.left-closed {{ grid-template-columns: 2.05rem 0 minmax(30rem, 1fr) 15rem 2.05rem; }}
+    .ide-shell.right-closed {{ grid-template-columns: 2.05rem 15rem minmax(30rem, 1fr) 0 2.05rem; }}
+    .ide-shell.left-closed.right-closed {{ grid-template-columns: 2.05rem 0 minmax(30rem, 1fr) 0 2.05rem; }}
     .project-titlebar {{
         display: flex;
         align-items: center;
@@ -78,6 +95,37 @@ goal editor: View::web = """
     }}
     .project-titlebar button:hover {{ background: #505254; color: white; }}
     .project-body {{ min-height: 0; overflow: auto; padding-top: 0.25rem; }}
+    .tool-list {{ margin: 0; padding: 0.4rem; list-style: none; }}
+    .tool-list li {{ padding: 0.45rem 0.55rem; border-radius: 3px; color: #c8c8c8; }}
+    .tool-list li:hover {{ background: #47494b; }}
+    .tool-empty {{
+        display: grid;
+        place-items: center;
+        min-height: 100%;
+        padding: 1rem;
+        color: #8f8f8f;
+        text-align: center;
+    }}
+    .commit-box, .ai-box {{ padding: 0.65rem; }}
+    .commit-box textarea, .ai-box textarea {{
+        width: 100%;
+        min-height: 5rem;
+        padding: 0.5rem;
+        resize: vertical;
+        border: 1px solid #5a5a5a;
+        border-radius: 3px;
+        outline: none;
+        background: #2b2b2b;
+        color: #c8c8c8;
+    }}
+    .panel-button {{
+        margin-top: 0.5rem;
+        padding: 0.4rem 0.7rem;
+        border: 1px solid #5b7fa8;
+        border-radius: 3px;
+        background: #365880;
+        color: white;
+    }}
     .file-tree, .file-tree ul {{ margin: 0; padding: 0; list-style: none; }}
     .file-tree details > summary {{
         min-height: 1.55rem;
@@ -116,6 +164,8 @@ goal editor: View::web = """
     .file-tree-file.markdown::before {{ content: "M"; background: #4a88c7; }}
     .file-tree-file.active {{ background: #4b6eaf; color: #ffffff; }}
     .editor-panel {{
+        grid-column: 3;
+        grid-row: 1;
         display: grid;
         grid-template-rows: 2.2rem minmax(0, 1fr);
         min-width: 0;
@@ -188,8 +238,37 @@ goal editor: View::web = """
         white-space: pre;
     }}
     .source-editor::selection {{ background: #214283; }}
+    .bottom-panel {{
+        grid-column: 2 / 5;
+        grid-row: 2;
+        display: none;
+        grid-template-rows: 2rem minmax(0, 1fr);
+        min-width: 0;
+        min-height: 0;
+        border-top: 1px solid #515151;
+        background: #2b2b2b;
+    }}
+    .bottom-open {{ grid-template-rows: minmax(0, 1fr) 12rem 1.55rem; }}
+    .bottom-open .bottom-panel {{ display: grid; }}
+    .terminal-titlebar {{
+        display: flex;
+        align-items: center;
+        padding: 0 0.55rem;
+        border-bottom: 1px solid #454545;
+        background: #3c3f41;
+    }}
+    .terminal-titlebar strong {{ flex: 1; }}
+    .terminal-titlebar button {{ border: 0; background: transparent; color: #aaaaaa; font-size: 1rem; }}
+    .terminal-screen {{
+        margin: 0;
+        padding: 0.65rem 0.8rem;
+        overflow: auto;
+        color: #b8c7a3;
+        font: 0.8rem/1.5 "JetBrains Mono", Consolas, monospace;
+    }}
     .statusbar {{
         grid-column: 1 / -1;
+        grid-row: 3;
         display: flex;
         align-items: center;
         gap: 1rem;
@@ -233,24 +312,28 @@ goal editor: View::web = """
     .status-actions .debug {{ color: #7ba45d; font-weight: 700; }}
     .statusbar .status-spacer {{ flex: 1; }}
     .statusbar span {{ white-space: nowrap; }}
-    @media (max-width: 800px) {{
-        .ide-shell {{ grid-template-columns: 1.8rem 11rem minmax(24rem, 1fr) 1.8rem; }}
+    @media (max-width: 1000px) {{
+        .ide-shell {{ grid-template-columns: 1.8rem 11rem minmax(24rem, 1fr) 11rem 1.8rem; }}
+        .ide-shell.left-closed {{ grid-template-columns: 1.8rem 0 minmax(24rem, 1fr) 11rem 1.8rem; }}
+        .ide-shell.right-closed {{ grid-template-columns: 1.8rem 11rem minmax(24rem, 1fr) 0 1.8rem; }}
+        .ide-shell.left-closed.right-closed {{ grid-template-columns: 1.8rem 0 minmax(24rem, 1fr) 0 1.8rem; }}
     }}
 </style>
-<main class="ide-shell">
+<main class="ide-shell {if leftTool == "" then "left-closed" else "left-" + leftTool} {if rightTool == "" then "right-closed" else "right-" + rightTool} {if bottomTool == "terminal" then "bottom-open" else ""}">
     <aside class="tool-stripe left" aria-label="Werkzeugfenster">
-        <button class="active" title="Project">▦</button>
-        <button title="Structure">⌘</button>
-        <button title="Commit">✓</button>
+        <button class="{if leftTool == "project" then "active" else ""}" title="Project" sic:onclick="{_ => leftTool <- if leftTool == "project" then "" else "project"}">▦</button>
+        <button class="{if leftTool == "structure" then "active" else ""}" title="Structure" sic:onclick="{_ => leftTool <- if leftTool == "structure" then "" else "structure"}">⌘</button>
+        <button class="{if leftTool == "commit" then "active" else ""}" title="Commit" sic:onclick="{_ => leftTool <- if leftTool == "commit" then "" else "commit"}">✓</button>
         <span class="spacer"></span>
-        <button title="Terminal">›_</button>
+        <button class="{if bottomTool == "terminal" then "active" else ""}" title="Terminal" sic:onclick="{_ => bottomTool <- if bottomTool == "terminal" then "" else "terminal"}">›_</button>
     </aside>
 
-    <aside class="project-panel" aria-label="Projekt">
+    <aside class="project-panel" aria-label="Linkes Werkzeugfenster">
+        <div class="tool-content project-content">
         <div class="project-titlebar">
             <strong>Project</strong>
             <button title="Optionen">⋮</button>
-            <button title="Minimieren">−</button>
+            <button title="Minimieren" sic:onclick="{_ => leftTool <- ""}">−</button>
         </div>
         <nav class="project-body" aria-label="Dateibaum">
             <ul class="file-tree">
@@ -281,6 +364,24 @@ goal editor: View::web = """
                 </li>
             </ul>
         </nav>
+        </div>
+        <div class="tool-content structure-content">
+            <div class="project-titlebar"><strong>Structure</strong><button sic:onclick="{_ => leftTool <- ""}">−</button></div>
+            <ul class="tool-list">
+                <li>◇ greeting: String</li>
+                <li>◇ prefix: String</li>
+                <li>◇ name: String</li>
+            </ul>
+        </div>
+        <div class="tool-content commit-content">
+            <div class="project-titlebar"><strong>Commit</strong><button sic:onclick="{_ => leftTool <- ""}">−</button></div>
+            <div class="commit-box">
+                <strong>Changes</strong>
+                <ul class="tool-list"><li>frontend/app.sic</li></ul>
+                <textarea placeholder="Commit message"></textarea>
+                <button class="panel-button">Commit</button>
+            </div>
+        </div>
     </aside>
 
     <section class="editor-panel">
@@ -326,12 +427,36 @@ goal editor: View::web = """
         </div>
     </section>
 
-    <aside class="tool-stripe right" aria-label="Rechte Werkzeugfenster">
-        <button title="Notifications">◉</button>
-        <button title="Database">▤</button>
-        <span class="spacer"></span>
-        <button title="AI Assistant">✦</button>
+    <aside class="right-panel" aria-label="Rechtes Werkzeugfenster">
+        <div class="tool-content notifications-content">
+            <div class="project-titlebar"><strong>Notifications</strong><button sic:onclick="{_ => rightTool <- ""}">−</button></div>
+            <div class="tool-empty">Keine neuen Benachrichtigungen</div>
+        </div>
+        <div class="tool-content database-content">
+            <div class="project-titlebar"><strong>Database</strong><button sic:onclick="{_ => rightTool <- ""}">−</button></div>
+            <ul class="tool-list"><li>＋ Data Source</li><li>⌁ Local files</li></ul>
+        </div>
+        <div class="tool-content ai-content">
+            <div class="project-titlebar"><strong>AI Assistant</strong><button sic:onclick="{_ => rightTool <- ""}">−</button></div>
+            <div class="ai-box"><textarea placeholder="Ask AI Assistant"></textarea><button class="panel-button">Send</button></div>
+        </div>
     </aside>
+
+    <aside class="tool-stripe right" aria-label="Rechte Werkzeugfenster">
+        <button class="{if rightTool == "notifications" then "active" else ""}" title="Notifications" sic:onclick="{_ => rightTool <- if rightTool == "notifications" then "" else "notifications"}">◉</button>
+        <button class="{if rightTool == "database" then "active" else ""}" title="Database" sic:onclick="{_ => rightTool <- if rightTool == "database" then "" else "database"}">▤</button>
+        <span class="spacer"></span>
+        <button class="{if rightTool == "ai" then "active" else ""}" title="AI Assistant" sic:onclick="{_ => rightTool <- if rightTool == "ai" then "" else "ai"}">✦</button>
+    </aside>
+
+    <section class="bottom-panel" aria-label="Terminal">
+        <div class="terminal-titlebar">
+            <strong>Terminal</strong>
+            <button title="Schließen" sic:onclick="{_ => bottomTool <- ""}">×</button>
+        </div>
+        <pre class="terminal-screen">SIC Editor Terminal
+$ _</pre>
+    </section>
 
     <footer class="statusbar">
         <span class="path">editor</span>
@@ -352,3 +477,6 @@ goal editor: View::web = """
 """
 
 var source: String = "goal greeting: String = prefix + name\nlet prefix = \"Hallo \"\nlet name = \"SIC\""
+var leftTool: String = "project"
+var rightTool: String = ""
+var bottomTool: String = ""

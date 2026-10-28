@@ -28,6 +28,7 @@ class WebEvaluationContext:
         self.components: dict[str, str] = {}
         self.dependencies: dict[str, set[str]] = {}
         self.binding_dependencies: dict[str, set[str]] = {}
+        self.root_dependencies: set[str] = set()
         self.effect_components: list[tuple[EffectSubscription, str]] = []
         self.effect_sources: list[tuple[EffectSubscription, str]] = []
         self._component_stack: list[str] = []
@@ -50,8 +51,11 @@ class WebEvaluationContext:
     def record_read(self, names: set[str]) -> None:
         for collector in self._collectors:
             collector.update(names)
+        if self._suppress_component_reads:
+            return
         component = self.component_id
-        if component is None or self._suppress_component_reads:
+        if component is None:
+            self.root_dependencies.update(names)
             return
         target = (
             self.binding_dependencies if self.read_mode == "binding"

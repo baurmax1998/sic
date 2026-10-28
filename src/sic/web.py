@@ -938,7 +938,9 @@ def create_app(config_path: str | Path = "app.sic"):
                 elif relevant and context.dependencies.get(component, set()) & changed:
                     affected.add(component)
             produced = tuple(event_evaluator.messages[before:])
-            if changed and affected:
+            if changed and context.root_dependencies & changed:
+                await refresh(full=True)
+            elif changed and affected:
                 await refresh(full=False, affected=affected)
             local_effects = tuple(
                 message for message in produced

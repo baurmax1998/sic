@@ -236,6 +236,50 @@ def test_frontend_var_updates_only_dependent_component_and_keeps_origin(tmp_path
             assert 'value=""' in cleared["html"]
 
 
+def test_frontend_var_rerenders_view_root(tmp_path):
+    backend = tmp_path / "backend"
+    frontend = tmp_path / "frontend"
+    backend.mkdir()
+    frontend.mkdir()
+    config_path = tmp_path / "app.sic"
+    config_path.write_text(
+        '''
+        goal app: App::web = {
+            port: 8000,
+            pages: ["frontend/app.sic"],
+            backend: "backend"
+        }
+        ''', encoding="utf-8",
+    )
+    (backend / "effects.sic").write_text(
+        "effect Changed: String\n", encoding="utf-8"
+    )
+    (frontend / "app.sic").write_text(
+        '''
+        goal view: View::web = """
+        <button class="{if open then "open" else "closed"}"
+                sic:onclick="{_ => open <- not open}">Toggle</button>
+        """
+        var open: Bool = false
+        ''', encoding="utf-8",
+    )
+
+    app = create_app(config_path)
+    with TestClient(app) as client:
+        with client.websocket_connect("/__sic_ws?page=/") as websocket:
+            initial = websocket.receive_json()
+            assert initial["type"] == "replace"
+            assert 'class="closed"' in initial["html"]
+            import re
+            handler = re.search(r'sic:onclick="([^"]+)"', initial["html"]).group(1)
+            websocket.send_json({
+                "type": "event", "handler": handler, "value": True,
+            })
+            update = websocket.receive_json()
+            assert update["type"] == "replace"
+            assert 'class="open"' in update["html"]
+
+
 def test_backend_effect_replaces_only_dependent_component(tmp_path):
     backend = tmp_path / "backend"
     frontend = tmp_path / "frontend"
