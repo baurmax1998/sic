@@ -1,0 +1,9 @@
+void FileChanged::files::std
+ignore FileChanged::files::std
+emit todosChanged: Todos::effects::backend = id
+
+goal deleteTodo: List<Todo> =
+    if saved then updated else err persistenceError = "Todo konnte nicht gespeichert werden"
+let saved = write_json::files::std(updated, "backend/todos.json")
+let updated = todos.filter(todo => todo.id != (id: Int))
+let todos = read_json::files::std("backend/todos.json"): List<Todo>

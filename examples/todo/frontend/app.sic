@@ -1,0 +1,31 @@
+goal view: View::web =
+    Column::web([
+            Text::web("hallo todo app nutzer um tolle sachen "),
+            Input::web(
+                placeholder: "Neue Aufgabe",
+                on_submit: title =>
+                    createTodo::backend(title: title)
+            ),
+
+            ListView::web(
+                todos.map(todo =>
+                    Row::web([
+                        Checkbox::web(
+                            todo.done,
+                            on_change: _ =>
+                                toggleTodo::backend(id: todo.id)
+                        ),
+
+                        Text::web(todo.title),
+
+                        Button::web(
+                            "Löschen",
+                            on_click: _ =>
+                                deleteTodo::backend(id: todo.id)
+                        )
+                    ])
+                )
+            )
+        ])
+
+let todos = listTodos::backend()

@@ -1,0 +1,17 @@
+void FileChanged::files::std
+ignore FileChanged::files::std
+emit todosChanged: Todos::effects::backend = createTodo.id
+
+goal createTodo: Todo =
+    if saved then todo else err persistenceError = "Todo konnte nicht gespeichert werden"
+let saved = write_json::files::std(updated, "backend/todos.json")
+let updated: List<Todo> = todos + [todo]
+let todos = read_json::files::std("backend/todos.json")
+let todo = {id: nextId, title: """Hallo {title: String}""", done: false}
+let nextId =
+    (todos
+        .map(todo => todo.id: Int)
+        .sort()
+        .last() ?? 0
+    ) + 1
+let title = "Neue Aufgabe"

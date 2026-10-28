@@ -1,0 +1,1 @@
+"""SIC – zielorientierte Programmiersprache."""

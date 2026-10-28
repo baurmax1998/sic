@@ -1,0 +1,8 @@
+goal todo: Todo = {
+    id: id,
+    title: title,
+    done: done
+}
+let id = 0
+let title = ""
+let done = false

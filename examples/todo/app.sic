@@ -1,0 +1,5 @@
+goal app: App::web = {
+    port: 8000,
+    pages: ["frontend/app.sic"],
+    backend: "backend"
+}

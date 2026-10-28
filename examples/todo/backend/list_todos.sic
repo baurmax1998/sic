@@ -1,0 +1,5 @@
+ignore FileChanged::files::std
+on Todos::effects::backend
+
+goal listTodos: List<Todo> =
+    read_json::files::std("backend/todos.json"): List<Todo>
