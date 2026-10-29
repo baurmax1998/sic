@@ -328,6 +328,25 @@ goal editor: View::web = """
         color: #a9b7c6;
         pointer-events: none;
     }}
+    .debug-inline-layer {{
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        overflow: hidden;
+        pointer-events: none;
+        font: 0.88rem/1.55 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+    }}
+    .debug-inline-value {{
+        position: absolute;
+        max-width: 45%;
+        overflow: hidden;
+        padding: 0 0.35rem;
+        border-radius: 3px;
+        background: rgb(74 83 48 / 0.9);
+        color: #c7d79c;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }}
     .source-editor {{
         z-index: 2;
         min-width: 0;
@@ -762,6 +781,40 @@ goal editor: View::web = """
             }}));
             gutter.scrollTop = editor.scrollTop;
         }};
+        const renderDebugInline = editor => {{
+            const layer = editor.closest(".editor-input")?.querySelector(".debug-inline-layer");
+            if (!layer) return;
+            const path = window.__sicCurrentFile || "";
+            const entries = (window.__sicDebugInline || []).filter(item => item.path === path);
+            layer.replaceChildren();
+            if (!entries.length) return;
+            const style = getComputedStyle(editor);
+            const lineHeight = parseFloat(style.lineHeight);
+            const paddingTop = parseFloat(style.paddingTop);
+            const paddingLeft = parseFloat(style.paddingLeft);
+            const lines = editor.value.split("\n");
+            const canvas = renderDebugInline.canvas ||= document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            context.font = style.font;
+            const byLine = new Map();
+            for (const entry of entries) {{
+                const values = byLine.get(entry.line) || [];
+                const shown = typeof entry.value === "string"
+                    ? JSON.stringify(entry.value) : JSON.stringify(entry.value, null, 0);
+                values.push(`${{entry.name}} = ${{shown ?? String(entry.value)}}`);
+                byLine.set(entry.line, values);
+            }}
+            for (const [line, values] of byLine) {{
+                const widget = document.createElement("span");
+                widget.className = "debug-inline-value";
+                widget.textContent = values.join("   ");
+                const sourceLine = (lines[line - 1] || "").replace(/\t/g, "    ");
+                const wantedLeft = paddingLeft + context.measureText(sourceLine).width - editor.scrollLeft + 14;
+                widget.style.left = `${{Math.max(paddingLeft, Math.min(wantedLeft, editor.clientWidth - 120))}}px`;
+                widget.style.top = `${{paddingTop + (line - 1) * lineHeight - editor.scrollTop}}px`;
+                layer.append(widget);
+            }}
+        }};
         const syncEditorScroll = editor => {{
             const layer = editor.closest(".editor-input")?.querySelector(".highlight-layer");
             if (layer) {{
@@ -769,6 +822,7 @@ goal editor: View::web = """
                 layer.scrollLeft = editor.scrollLeft;
             }}
             updateLineNumbers(editor);
+            renderDebugInline(editor);
         }};
         const diagnosticTooltip = () => {{
             let tooltip = document.querySelector(".diagnostic-tooltip");
@@ -1099,6 +1153,9 @@ goal editor: View::web = """
                 highlightUsages(document.activeElement);
         }});
         document.addEventListener("sic:bindings-hydrated", updateAllEditors);
+        document.addEventListener("sic:debug-updated", () =>
+            document.querySelectorAll(".source-editor").forEach(renderDebugInline)
+        );
         requestAnimationFrame(updateAllEditors);
     }}
 
@@ -1117,6 +1174,7 @@ goal editor: View::web = """
         let debugTrace = [];
         let debugIndex = -1;
         let debugResult = null;
+        window.__sicDebugInline ||= [];
 
         const sourceEditor = () => document.querySelector(".source-editor");
         const setSaveStatus = (text, kind = "") => {{
@@ -1410,11 +1468,13 @@ goal editor: View::web = """
             debugIndex = Math.max(0, Math.min(index, debugTrace.length - 1));
             const event = debugTrace[debugIndex];
             window.__sicDebugLocation = {{path: event.path, line: event.line}};
+            window.__sicDebugInline = debugTrace.slice(0, debugIndex + 1);
             if (currentFile !== event.path) await openWorkspaceFile(event.path, false);
             document.querySelectorAll(".line-number").forEach(node =>
                 node.classList.toggle("debug-current", Number(node.dataset.line) === event.line)
             );
             displayDebugState();
+            document.dispatchEvent(new CustomEvent("sic:debug-updated"));
         }};
         const startDebugging = async () => {{
             if (!await prepareSelectedGoal()) return;
@@ -1454,9 +1514,11 @@ goal editor: View::web = """
             debugIndex = -1;
             debugResult = null;
             window.__sicDebugLocation = null;
+            window.__sicDebugInline = [];
             document.querySelectorAll(".line-number.debug-current")
                 .forEach(node => node.classList.remove("debug-current"));
             displayDebugState();
+            document.dispatchEvent(new CustomEvent("sic:debug-updated"));
             setSaveStatus("Debugger gestoppt");
         }};
         const parentPath = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";

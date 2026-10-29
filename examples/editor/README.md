@@ -30,7 +30,8 @@ Ein Klick auf eine Zeilennummer setzt oder entfernt einen Breakpoint. `D`
 startet das ausgewählte Goal im Debugger. Das Debug-Fenster bietet Fortsetzen,
 Schritt über und Stop sowie Stack-, Variablen- und Laufzeitausgabe. Entsprechend
 der deklarativen Auswertung liegen Debug-Schritte auf `goal`-, `let`- und
-`var`-Bindungen.
+`var`-Bindungen. Bereits ausgewertete Bindungen werden während des Debuggens
+zusätzlich direkt hinter ihrer Quellzeile als Inline-Werte eingeblendet.
 
 Der Editor unterstützt außerdem Zeilennummern, eigenes semantisches
 Syntax-Highlighting, Diagnosen, Verwendungshervorhebung und Autocomplete.
