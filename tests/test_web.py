@@ -79,7 +79,8 @@ def test_sic_web_config_and_static_build(tmp_path):
     assert generated == [tmp_path / ".out" / "index.html"]
     document = generated[0].read_text(encoding="utf-8")
     assert "Hallo SIC" in document
-    assert "window.sic = {call, analyze, actions: definitions}" in document
+    assert "window.sic = {call, analyze, workspace, actions: definitions}" in document
+    assert "run: (path, values = {})" in document
     assert '"greet":{"transport":"websocket"}' in document
     assert 'console.info("[SIC] Aktion gesendet"' in document
     assert 'closestSicHandler(event.target, "sic:oninput")' in document
@@ -121,6 +122,105 @@ def test_websocket_exposes_source_analysis(tmp_path):
             recovered = websocket.receive_json()
             assert recovered["type"] == "analysis"
             assert recovered["result"]["diagnostics"] == []
+
+
+def test_workspace_api_lists_reads_writes_and_contains_paths(tmp_path):
+    editor = tmp_path / "editor"
+    basic = tmp_path / "basic"
+    backend = editor / "backend"
+    frontend = editor / "frontend"
+    backend.mkdir(parents=True)
+    frontend.mkdir()
+    basic.mkdir()
+    (basic / "app.sic").write_text(
+        'goal answer: Int = value::new()\n', encoding="utf-8"
+    )
+    (basic / "new.sic").write_text('goal value: Int = 42\n', encoding="utf-8")
+    config_path = editor / "app.sic"
+    config_path.write_text(
+        '''
+        goal app: App::web = {
+            port: 8000,
+            pages: ["frontend/app.sic"],
+            backend: "backend",
+            workspace: "../basic"
+        }
+        ''', encoding="utf-8",
+    )
+    (backend / "effects.sic").write_text("effect Changed: String\n", encoding="utf-8")
+    (frontend / "app.sic").write_text(
+        'goal view: View::web = """Editor"""', encoding="utf-8"
+    )
+
+    config = load_web_config(config_path)
+    assert config.workspace == basic.resolve()
+    app = create_app(config_path)
+    with TestClient(app) as client:
+        with client.websocket_connect("/__sic_ws?page=/") as websocket:
+            websocket.receive_json()
+            websocket.send_json({"type": "workspace-list", "id": "1"})
+            tree = websocket.receive_json()
+            assert tree["result"]["name"] == "basic"
+            assert tree["result"]["children"][0]["path"] == "app.sic"
+
+            websocket.send_json({
+                "type": "workspace-read", "id": "2", "path": "app.sic",
+            })
+            app_source = websocket.receive_json()["result"]["content"]
+            assert app_source == 'goal answer: Int = value::new()\n'
+
+            websocket.send_json({
+                "type": "analyze", "id": "analysis", "path": "app.sic",
+                "source": app_source,
+            })
+            analysis = websocket.receive_json()
+            assert analysis["type"] == "analysis"
+            assert analysis["result"]["diagnostics"] == []
+
+            websocket.send_json({"type": "workspace-goals", "id": "goals"})
+            goals = websocket.receive_json()["result"]
+            assert {goal["label"] for goal in goals} == {"answer::app", "value::new"}
+
+            websocket.send_json({
+                "type": "workspace-run", "id": "run", "path": "app.sic",
+                "arguments": {},
+            })
+            execution = websocket.receive_json()["result"]
+            assert execution["goal"] == "answer"
+            assert execution["value"] == 42
+
+            websocket.send_json({
+                "type": "workspace-write", "id": "3", "path": "src/new.sic",
+                "content": 'goal value: String = "neu"\n',
+            })
+            assert websocket.receive_json()["result"]["saved"] is True
+            assert (basic / "src" / "new.sic").read_text() == 'goal value: String = "neu"\n'
+
+            websocket.send_json({
+                "type": "workspace-mkdir", "id": "mkdir", "path": "module",
+            })
+            assert websocket.receive_json()["result"]["created"] is True
+            assert (basic / "module").is_dir()
+
+            websocket.send_json({
+                "type": "workspace-rename", "id": "rename",
+                "path": "src/new.sic", "newPath": "module/renamed.sic",
+            })
+            assert websocket.receive_json()["result"]["renamed"] is True
+            assert (basic / "module" / "renamed.sic").is_file()
+
+            websocket.send_json({
+                "type": "workspace-delete", "id": "delete", "path": "module",
+            })
+            assert websocket.receive_json()["result"]["deleted"] is True
+            assert not (basic / "module").exists()
+
+            websocket.send_json({
+                "type": "workspace-read", "id": "4", "path": "../secret.txt",
+            })
+            error = websocket.receive_json()
+            assert error["type"] == "error"
+            assert "verlässt den Workspace" in error["detail"]
 
 
 def test_web_goal_requires_standard_library_type(tmp_path):

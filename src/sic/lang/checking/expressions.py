@@ -242,6 +242,12 @@ class ExpressionInferenceMixin:
                     expression.function.name, expression.function.origin
                 )
             if external is not None:
+                # Der erwartete Ergebnistyp muss vor den Argumenten in eine
+                # generische Signatur einfließen. Andernfalls bleibt etwa der
+                # Parameter von `print(prefix + name)` beim Prüfen von `+`
+                # noch unbestimmt, obwohl der umgebende Goal-Typ String ist.
+                if expected is not None:
+                    self.assign(expected, external.type.result)
                 if not external.parameter_names:
                     if named:
                         raise LangTypeError("Externe Funktion besitzt keine benannten Parameter")

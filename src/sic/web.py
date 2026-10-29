@@ -7,12 +7,15 @@ der erzeugten Browserdateien.
 from __future__ import annotations
 
 import asyncio
+from contextlib import redirect_stdout
 from dataclasses import dataclass, fields, is_dataclass
 import html
+import io
 import json
 import logging
 from pathlib import Path
 import re
+import shutil
 import threading
 from typing import Any
 
@@ -22,7 +25,9 @@ from .lang import (
 )
 from .lang import ast
 from .lang.effects import EffectMessage, EffectSubscription
-from .lang.types import ListType, MapType, NullableType, Primitive, RecordType, Type, prune
+from .lang.types import (
+    ListType, MapType, NullableType, Primitive, RecordType, Type, format_type, prune,
+)
 from .lang.web_values import WebValue
 from .lang.tooling import analyze_source
 
@@ -47,6 +52,7 @@ class WebConfig:
     backend: str
     backend_programs: tuple[BackendProgram, ...]
     root: Path
+    workspace: Path | None = None
 
 
 def _inside(root: Path, raw: str, label: str) -> Path:
@@ -131,10 +137,99 @@ def load_web_config(path: str | Path = "app.sic") -> WebConfig:
     if not isinstance(backend, str) or not backend:
         raise ValueError("app.backend muss ein nicht leerer Paketname sein")
     pages = tuple(_inside(root, item, "page") for item in raw_pages)
+    workspace_raw = value.get("workspace")
+    workspace = None
+    if workspace_raw is not None:
+        if not isinstance(workspace_raw, str) or not workspace_raw:
+            raise ValueError("app.workspace muss ein nicht leerer String sein")
+        candidate = Path(workspace_raw)
+        workspace = (
+            candidate.resolve() if candidate.is_absolute()
+            else (root / candidate).resolve()
+        )
+        if not workspace.is_dir():
+            raise ValueError(f"Workspace-Verzeichnis existiert nicht: {workspace}")
     return WebConfig(
         title, host, port, output, pages, backend,
-        _discover_backend(root, backend), root,
+        _discover_backend(root, backend), root, workspace,
     )
+
+
+def _workspace_path(workspace: Path, raw: str) -> Path:
+    if not isinstance(raw, str) or not raw or "\x00" in raw:
+        raise ValueError("Ungültiger Workspace-Pfad")
+    path = (workspace / raw).resolve()
+    try:
+        path.relative_to(workspace)
+    except ValueError as exc:
+        raise ValueError(f"Pfad verlässt den Workspace: {raw}") from exc
+    return path
+
+
+def _workspace_tree(workspace: Path) -> dict[str, Any]:
+    ignored = {".git", ".idea", ".out", ".pytest_cache", "__pycache__"}
+
+    def entry(path: Path) -> dict[str, Any]:
+        relative = path.relative_to(workspace).as_posix()
+        if path.is_dir():
+            children = [
+                entry(child) for child in sorted(
+                    (
+                        item for item in path.iterdir()
+                        if item.name not in ignored and not item.is_symlink()
+                    ),
+                    key=lambda item: (not item.is_dir(), item.name.lower()),
+                )
+            ]
+            return {
+                "name": path.name, "path": relative, "type": "directory",
+                "children": children,
+            }
+        return {"name": path.name, "path": relative, "type": "file"}
+
+    return {
+        "name": workspace.name, "path": "", "type": "directory",
+        "children": [
+            entry(child) for child in sorted(
+                (
+                    item for item in workspace.iterdir()
+                    if item.name not in ignored and not item.is_symlink()
+                ),
+                key=lambda item: (not item.is_dir(), item.name.lower()),
+            )
+        ],
+    }
+
+
+def _workspace_registry(workspace: Path, active: Path | None = None):
+    """Registriert Workspace-Dateien als Module für die Analyse einer Datei."""
+    registry = standard_registry(workspace)
+    pending = [
+        source for source in sorted(workspace.rglob("*.sic"))
+        if ".out" not in source.relative_to(workspace).parts
+        and (active is None or source.resolve() != active.resolve())
+    ]
+    # Abhängige Module können vor ihren Lieferanten sortiert sein. Erfolgreiche
+    # Registrierungen werden deshalb behalten und unbekannte Abhängigkeiten in
+    # einem weiteren Durchlauf erneut versucht.
+    while pending:
+        remaining: list[Path] = []
+        progress = False
+        for source in pending:
+            relative = source.relative_to(workspace)
+            package = relative.parent.name if relative.parent != Path(".") else ""
+            try:
+                registry.register_source(
+                    source.stem, package, source.read_text(encoding="utf-8")
+                )
+            except (LangError, OSError, ValueError):
+                remaining.append(source)
+            else:
+                progress = True
+        if not progress:
+            break
+        pending = remaining
+    return registry
 
 
 def _project_registry(
@@ -479,14 +574,27 @@ const socketReady = new Promise((resolve, reject) => {{
   }}, {{once: true}});
   socket.addEventListener("error", () => reject(new Error("WebSocket-Verbindung fehlgeschlagen")), {{once: true}});
 }});
-async function analyze(source) {{
+async function request(message) {{
   await socketReady;
   const id = String(++callSequence);
   return new Promise((resolve, reject) => {{
     pendingCalls.set(id, {{resolve, reject}});
-    socket.send(JSON.stringify({{type: "analyze", id, source}}));
+    socket.send(JSON.stringify({{...message, id}}));
   }});
 }}
+async function analyze(source, path = null) {{
+  return request({{type: "analyze", source, path}});
+}}
+const workspace = {{
+  list: () => request({{type: "workspace-list"}}),
+  read: path => request({{type: "workspace-read", path}}),
+  write: (path, content) => request({{type: "workspace-write", path, content}}),
+  mkdir: path => request({{type: "workspace-mkdir", path}}),
+  rename: (path, newPath) => request({{type: "workspace-rename", path, newPath}}),
+  delete: path => request({{type: "workspace-delete", path}}),
+  goals: () => request({{type: "workspace-goals"}}),
+  run: (path, values = {{}}) => request({{type: "workspace-run", path, arguments: values}})
+}};
 async function call(name, values = {{}}) {{
   definition(name);
   await socketReady;
@@ -558,7 +666,7 @@ socket.addEventListener("message", event => {{
   const pending = pendingCalls.get(String(message.id));
   if (!pending) return;
   pendingCalls.delete(String(message.id));
-  if (message.type === "result" || message.type === "analysis") {{
+  if (message.type === "result" || message.type === "analysis" || message.type === "workspace-result") {{
     if (message.type === "result") console.info("[SIC] Aktion abgeschlossen", {{id: message.id}});
     pending.resolve(message.result);
   }} else {{
@@ -638,7 +746,7 @@ document.addEventListener("click", async event => {{
   show(name, result);
   document.dispatchEvent(new CustomEvent("sic:result", {{detail: {{name, result}}}}));
 }});
-window.sic = {{call, analyze, actions: definitions}};
+window.sic = {{call, analyze, workspace, actions: definitions}};
 """.strip()
 
 
@@ -928,6 +1036,132 @@ def create_app(config_path: str | Path = "app.sic"):
                 hex(id(token)), pathname, len(subscriptions), len(body.encode("utf-8")),
             )
 
+        async def execute_workspace(message: dict[str, Any]) -> None:
+            identifier = str(message.get("id", ""))
+            if config.workspace is None:
+                await websocket.send_json({
+                    "type": "error", "id": identifier,
+                    "detail": "Für diese App ist kein Workspace konfiguriert",
+                })
+                return
+            try:
+                kind = message.get("type")
+                if kind == "workspace-list":
+                    result: Any = _workspace_tree(config.workspace)
+                elif kind == "workspace-goals":
+                    goals: list[dict[str, Any]] = []
+                    for source_path in sorted(config.workspace.rglob("*.sic")):
+                        if ".out" in source_path.relative_to(config.workspace).parts:
+                            continue
+                        try:
+                            goal_registry = _workspace_registry(config.workspace, source_path)
+                            checked = compile_program(
+                                source_path.read_text(encoding="utf-8"), goal_registry
+                            )
+                        except (LangError, OSError, ValueError):
+                            continue
+                        goal = checked.program.goal.name
+                        relative = source_path.relative_to(config.workspace).as_posix()
+                        goals.append({
+                            "name": goal,
+                            "path": relative,
+                            "label": f"{goal}::{source_path.stem}",
+                            "inputs": [
+                                {"name": name, "type": format_type(type_)}
+                                for name, type_ in checked.inputs.items()
+                            ],
+                        })
+                    result = goals
+                else:
+                    path = _workspace_path(config.workspace, message.get("path"))
+                    if kind == "workspace-read":
+                        if not path.is_file():
+                            raise ValueError(f"Workspace-Datei existiert nicht: {message.get('path')}")
+                        if path.stat().st_size > 2_000_000:
+                            raise ValueError("Datei ist größer als 2 MB")
+                        result = {
+                            "path": path.relative_to(config.workspace).as_posix(),
+                            "content": path.read_text(encoding="utf-8"),
+                            "modified": path.stat().st_mtime_ns,
+                        }
+                    elif kind == "workspace-write":
+                        content = message.get("content")
+                        if not isinstance(content, str):
+                            raise ValueError("Dateiinhalt muss ein String sein")
+                        if len(content.encode("utf-8")) > 2_000_000:
+                            raise ValueError("Dateiinhalt ist größer als 2 MB")
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text(content, encoding="utf-8")
+                        result = {
+                            "path": path.relative_to(config.workspace).as_posix(),
+                            "saved": True, "modified": path.stat().st_mtime_ns,
+                        }
+                    elif kind == "workspace-mkdir":
+                        path.mkdir(parents=True, exist_ok=False)
+                        result = {
+                            "path": path.relative_to(config.workspace).as_posix(),
+                            "created": True,
+                        }
+                    elif kind == "workspace-rename":
+                        target = _workspace_path(config.workspace, message.get("newPath"))
+                        if not path.exists():
+                            raise ValueError(f"Workspace-Pfad existiert nicht: {message.get('path')}")
+                        if target.exists():
+                            raise ValueError(f"Ziel existiert bereits: {message.get('newPath')}")
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        path.rename(target)
+                        result = {
+                            "path": target.relative_to(config.workspace).as_posix(),
+                            "oldPath": message.get("path"), "renamed": True,
+                        }
+                    elif kind == "workspace-delete":
+                        if not path.exists():
+                            raise ValueError(f"Workspace-Pfad existiert nicht: {message.get('path')}")
+                        if path.is_dir():
+                            shutil.rmtree(path)
+                        else:
+                            path.unlink()
+                        result = {"path": message.get("path"), "deleted": True}
+                    elif kind == "workspace-run":
+                        if not path.is_file() or path.suffix != ".sic":
+                            raise ValueError("Nur SIC-Dateien können ausgeführt werden")
+                        arguments = message.get("arguments", {})
+                        if not isinstance(arguments, dict):
+                            raise ValueError("Goal-Argumente müssen ein Objekt sein")
+                        run_registry = _workspace_registry(config.workspace, path)
+                        checked = compile_program(
+                            path.read_text(encoding="utf-8"), run_registry
+                        )
+                        missing = set(checked.inputs) - set(arguments)
+                        unknown = set(arguments) - set(checked.inputs)
+                        if missing or unknown:
+                            name = sorted(missing or unknown)[0]
+                            raise ValueError(f"Ungültiges Goal-Argument: {name}")
+                        output = io.StringIO()
+                        with redirect_stdout(output):
+                            execution = Evaluator(checked, run_registry, arguments).run()
+                        value = execution.value
+                        try:
+                            json.dumps(value)
+                        except (TypeError, ValueError):
+                            value = repr(value)
+                        result = {
+                            "goal": checked.program.goal.name,
+                            "path": path.relative_to(config.workspace).as_posix(),
+                            "value": value,
+                            "stdout": output.getvalue(),
+                        }
+                    else:
+                        raise ValueError("Unbekannte Workspace-Operation")
+            except (LangError, OSError, UnicodeError, ValueError) as exc:
+                await websocket.send_json({
+                    "type": "error", "id": identifier, "detail": str(exc),
+                })
+                return
+            await websocket.send_json({
+                "type": "workspace-result", "id": identifier, "result": result,
+            })
+
         async def execute_analysis(message: dict[str, Any]) -> None:
             source = message.get("source")
             identifier = str(message.get("id", ""))
@@ -937,10 +1171,22 @@ def create_app(config_path: str | Path = "app.sic"):
                     "detail": "Analyse benötigt Quelltext als String",
                 })
                 return
-            registry = compiled[2] if compiled is not None else _project_registry(
-                config.root, config.backend, config.backend_programs,
-                include_frontend=True,
-            )
+            if config.workspace is not None and message.get("path"):
+                try:
+                    active = _workspace_path(config.workspace, message.get("path"))
+                except ValueError as exc:
+                    await websocket.send_json({
+                        "type": "error", "id": identifier, "detail": str(exc),
+                    })
+                    return
+                registry = await run_in_threadpool(
+                    _workspace_registry, config.workspace, active,
+                )
+            else:
+                registry = compiled[2] if compiled is not None else _project_registry(
+                    config.root, config.backend, config.backend_programs,
+                    include_frontend=True,
+                )
             result = await run_in_threadpool(analyze_source, source, registry)
             await websocket.send_json({
                 "type": "analysis", "id": identifier, "result": result,
@@ -1071,6 +1317,15 @@ def create_app(config_path: str | Path = "app.sic"):
                         await execute_socket_call(websocket, message)
                     elif isinstance(message, dict) and message.get("type") == "analyze":
                         await execute_analysis(message)
+                    elif (
+                        isinstance(message, dict)
+                        and message.get("type") in {
+                            "workspace-list", "workspace-read", "workspace-write",
+                            "workspace-mkdir", "workspace-rename", "workspace-delete",
+                            "workspace-goals", "workspace-run",
+                        }
+                    ):
+                        await execute_workspace(message)
                     elif isinstance(message, dict) and message.get("type") == "event":
                         await execute_local_event(message)
                     else:

@@ -3,14 +3,15 @@ goal editorArea: Component::web = """
     <div class="tabs">
         <div class="editor-tab">
             <span class="sic-icon">S</span>
-            <span>app.sic</span>
-            <span class="close">×</span>
+            <span data-current-file>app.sic</span>
+            <span class="close" data-dirty-indicator>×</span>
         </div>
     </div>
     <div class="editor-canvas">
         <div class="line-numbers" aria-hidden="true">1</div>
         <div class="editor-input">
             <pre class="highlight-layer" aria-hidden="true"></pre>
+            <div class="autocomplete" role="listbox" hidden></div>
             <textarea
                 class="source-editor"
                 aria-label="SIC-Quelltext"

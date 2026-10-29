@@ -141,9 +141,13 @@ goal editor: View::web = """
         display: flex;
         align-items: center;
         gap: 0.38rem;
+        width: 100%;
         min-height: 1.55rem;
         padding: 0.22rem 0.55rem;
+        border: 0;
+        background: transparent;
         color: #c8c8c8;
+        text-align: left;
         white-space: nowrap;
         cursor: default;
     }}
@@ -160,7 +164,87 @@ goal editor: View::web = """
         font-weight: 700;
     }}
     .file-tree-file.markdown::before {{ content: "M"; background: #4a88c7; }}
+    .workspace-file-row, .file-tree details > summary {{ position: relative; }}
+    .workspace-entry-name {{ padding-right: 1.5rem; }}
+    .workspace-more {{
+        position: absolute;
+        top: 50%;
+        right: 0.2rem;
+        z-index: 2;
+        width: 1.35rem;
+        height: 1.25rem;
+        padding: 0;
+        transform: translateY(-50%);
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        color: #9b9b9b;
+        font-weight: 700;
+        line-height: 1;
+    }}
+    .workspace-more:hover, .workspace-more[aria-expanded="true"] {{
+        background: #5a5d60;
+        color: #ffffff;
+    }}
+    .workspace-context-menu {{
+        position: fixed;
+        z-index: 1200;
+        min-width: 11rem;
+        padding: 0.25rem;
+        border: 1px solid #5b5d5f;
+        border-radius: 4px;
+        background: #3c3f41;
+        box-shadow: 0 0.45rem 1.2rem rgb(0 0 0 / 0.5);
+    }}
+    .workspace-context-menu button {{
+        display: block;
+        width: 100%;
+        padding: 0.38rem 0.6rem;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        color: #d5d5d5;
+        text-align: left;
+    }}
+    .workspace-context-menu button:hover {{ background: #4b6eaf; color: white; }}
+    .workspace-context-menu .danger {{ color: #ff8b88; }}
+    .workspace-context-menu[hidden] {{ display: none; }}
+    .run-goal-menu {{
+        position: fixed;
+        z-index: 1200;
+        min-width: 14rem;
+        max-height: 18rem;
+        overflow: auto;
+        padding: 0.25rem;
+        border: 1px solid #5b5d5f;
+        border-radius: 4px;
+        background: #3c3f41;
+        box-shadow: 0 0.45rem 1.2rem rgb(0 0 0 / 0.5);
+    }}
+    .run-goal-menu button {{
+        display: grid;
+        width: 100%;
+        padding: 0.38rem 0.6rem;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        color: #d5d5d5;
+        text-align: left;
+    }}
+    .run-goal-menu button:hover, .run-goal-menu button.selected {{ background: #4b6eaf; color: white; }}
+    .run-goal-menu small {{ color: #999999; }}
+    .run-goal-menu[hidden] {{ display: none; }}
     .file-tree-file.active {{ background: #4b6eaf; color: #ffffff; }}
+    .file-tree-file.workspace-selected, .file-tree summary.workspace-selected {{
+        outline: 1px solid #6684b7;
+        outline-offset: -1px;
+        background: #3d4b61;
+    }}
+    .workspace-loading {{ padding: 0.5rem 0.75rem; color: #8f8f8f; }}
+    .editor-tab.dirty .close {{ color: #d9a343; }}
+    .save-status {{ color: #888888; }}
+    .save-status.error {{ color: #ff6b68; }}
+    .save-status.saved {{ color: #6a8759; }}
     .editor-panel {{
         grid-column: 3;
         grid-row: 1;
@@ -219,7 +303,7 @@ goal editor: View::web = """
         user-select: none;
         font: 0.88rem/1.55 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
     }}
-    .editor-input {{ position: relative; min-width: 0; min-height: 0; overflow: hidden; }}
+    .editor-input {{ position: relative; min-width: 0; min-height: 0; overflow: visible; }}
     .highlight-layer, .source-editor {{
         position: absolute;
         inset: 0;
@@ -274,6 +358,72 @@ goal editor: View::web = """
         text-underline-offset: 3px;
     }}
     .tok-usage {{ background: #3b514d; border-radius: 2px; }}
+    .diagnostic-tooltip {{
+        position: fixed;
+        z-index: 1100;
+        max-width: min(30rem, calc(100vw - 1rem));
+        padding: 0.45rem 0.65rem;
+        border: 1px solid #70504f;
+        border-radius: 4px;
+        background: #4a3434;
+        box-shadow: 0 0.4rem 1rem rgb(0 0 0 / 0.45);
+        color: #f2dede;
+        pointer-events: none;
+        white-space: normal;
+        font: 0.78rem/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    .diagnostic-tooltip::before {{
+        content: "Fehler";
+        display: block;
+        margin-bottom: 0.15rem;
+        color: #ff7774;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }}
+    .diagnostic-tooltip[hidden] {{ display: none; }}
+    .autocomplete {{
+        position: fixed;
+        z-index: 1000;
+        width: 18rem;
+        max-height: 15rem;
+        overflow: auto;
+        padding: 0.2rem;
+        border: 1px solid #5b5d5f;
+        border-radius: 4px;
+        background: #3c3f41;
+        box-shadow: 0 0.45rem 1.2rem rgb(0 0 0 / 0.45);
+        color: #d5d5d5;
+        font: 0.78rem/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    .autocomplete[hidden] {{ display: none; }}
+    .autocomplete-item {{
+        display: grid;
+        grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.35rem;
+        min-height: 1.65rem;
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        cursor: default;
+    }}
+    .autocomplete-item.selected {{ background: #4b6eaf; color: white; }}
+    .autocomplete-icon {{
+        display: grid;
+        place-items: center;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 2px;
+        background: #365880;
+        color: white;
+        font-size: 0.6rem;
+        font-weight: 700;
+    }}
+    .autocomplete-item[data-kind="keyword"] .autocomplete-icon {{ background: #9b623c; }}
+    .autocomplete-item[data-kind="type"] .autocomplete-icon {{ background: #9b813c; }}
+    .autocomplete-item[data-kind="variable"] .autocomplete-icon {{ background: #6b5680; }}
+    .autocomplete-kind {{ color: #929292; font-size: 0.68rem; }}
+    .autocomplete-item.selected .autocomplete-kind {{ color: #d9e6f7; }}
     .bottom-panel {{
         grid-column: 2 / 5;
         grid-row: 2;
@@ -571,6 +721,17 @@ goal editor: View::web = """
         const analysisByEditor = new WeakMap();
         const analysisVersion = new WeakMap();
         const analysisTimer = new WeakMap();
+        const completionState = new WeakMap();
+        const completionDefaults = [
+            ["goal", "keyword"], ["let", "keyword"], ["var", "keyword"],
+            ["if", "keyword"], ["then", "keyword"], ["else", "keyword"],
+            ["match", "keyword"], ["in", "keyword"], ["true", "constant"],
+            ["false", "constant"], ["null", "constant"], ["not", "keyword"],
+            ["and", "keyword"], ["or", "keyword"], ["String", "type"],
+            ["Int", "type"], ["Float", "type"], ["Bool", "type"],
+            ["List", "type"], ["Map", "type"], ["map", "method"],
+            ["filter", "method"], ["sum", "method"], ["first", "method"]
+        ];
 
         const updateLineNumbers = editor => {{
             const gutter = editor.closest(".editor-canvas")?.querySelector(".line-numbers");
@@ -587,6 +748,68 @@ goal editor: View::web = """
             }}
             updateLineNumbers(editor);
         }};
+        const diagnosticTooltip = () => {{
+            let tooltip = document.querySelector(".diagnostic-tooltip");
+            if (!tooltip) {{
+                tooltip = document.createElement("div");
+                tooltip.className = "diagnostic-tooltip";
+                tooltip.hidden = true;
+                document.body.append(tooltip);
+            }}
+            return tooltip;
+        }};
+        const hideDiagnosticTooltip = () => diagnosticTooltip().hidden = true;
+        const sourceOffsetAtPoint = (editor, event) => {{
+            const bounds = editor.getBoundingClientRect();
+            const style = getComputedStyle(editor);
+            const lineHeight = parseFloat(style.lineHeight);
+            const x = event.clientX - bounds.left - parseFloat(style.paddingLeft) + editor.scrollLeft;
+            const y = event.clientY - bounds.top - parseFloat(style.paddingTop) + editor.scrollTop;
+            if (x < 0 || y < 0) return null;
+            const lines = editor.value.split("\n");
+            const lineIndex = Math.floor(y / lineHeight);
+            if (lineIndex < 0 || lineIndex >= lines.length) return null;
+            const canvas = sourceOffsetAtPoint.canvas ||= document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            context.font = style.font;
+            const characterWidth = context.measureText("M").width;
+            const targetColumn = x / characterWidth;
+            const line = lines[lineIndex];
+            let visualColumn = 0;
+            let column = line.length;
+            for (let index = 0; index < line.length; index++) {{
+                const width = line[index] === "\t" ? 4 - visualColumn % 4 : 1;
+                if (targetColumn < visualColumn + width) {{ column = index; break; }}
+                visualColumn += width;
+            }}
+            const lineStart = lines.slice(0, lineIndex).reduce(
+                (total, value) => total + value.length + 1, 0
+            );
+            return lineStart + column;
+        }};
+        const showDiagnosticTooltip = (editor, event) => {{
+            const analysis = analysisByEditor.get(editor);
+            if (!analysis?.diagnostics?.length) {{ hideDiagnosticTooltip(); return; }}
+            const offset = sourceOffsetAtPoint(editor, event);
+            if (offset === null) {{ hideDiagnosticTooltip(); return; }}
+            const token = analysis.tokens.find(item => item.start <= offset && offset <= item.end);
+            const diagnostic = token
+                ? analysis.diagnostics.find(item => item.start < token.end && item.end >= token.start)
+                : analysis.diagnostics.find(item => item.start <= offset && offset <= Math.max(item.end, item.start + 1));
+            if (!diagnostic) {{ hideDiagnosticTooltip(); return; }}
+            const tooltip = diagnosticTooltip();
+            tooltip.textContent = diagnostic.message;
+            tooltip.hidden = false;
+            const tooltipBounds = tooltip.getBoundingClientRect();
+            let left = event.clientX + 14;
+            let top = event.clientY + 18;
+            if (left + tooltipBounds.width > window.innerWidth - 8)
+                left = window.innerWidth - tooltipBounds.width - 8;
+            if (top + tooltipBounds.height > window.innerHeight - 8)
+                top = event.clientY - tooltipBounds.height - 10;
+            tooltip.style.left = `${{Math.max(8, left)}}px`;
+            tooltip.style.top = `${{Math.max(8, top)}}px`;
+        }};
         const highlightUsages = editor => {{
             const layer = editor.closest(".editor-input")?.querySelector(".highlight-layer");
             const analysis = analysisByEditor.get(editor);
@@ -600,6 +823,123 @@ goal editor: View::web = """
             layer.querySelectorAll("[data-symbol]").forEach(node => {{
                 if (node.dataset.symbol === token.symbol) node.classList.add("tok-usage");
             }});
+        }};
+        const completionContext = (editor, manual = false) => {{
+            if (editor.selectionStart !== editor.selectionEnd) return null;
+            const before = editor.value.slice(0, editor.selectionStart);
+            const match = before.match(/[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*(?:::)?$/);
+            if (!match && !manual) return null;
+            return {{
+                start: match ? editor.selectionStart - match[0].length : editor.selectionStart,
+                prefix: match ? match[0] : ""
+            }};
+        }};
+        const positionAutocomplete = (editor, dropdown) => {{
+            const style = getComputedStyle(editor);
+            const before = editor.value.slice(0, editor.selectionStart).split("\n");
+            let column = 0;
+            for (const character of before.at(-1))
+                column += character === "\t" ? 4 - column % 4 : 1;
+            const canvas = positionAutocomplete.canvas ||= document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            context.font = style.font;
+            const characterWidth = context.measureText("M").width;
+            const lineHeight = parseFloat(style.lineHeight);
+            const bounds = editor.getBoundingClientRect();
+            let left = bounds.left + parseFloat(style.paddingLeft) + column * characterWidth - editor.scrollLeft;
+            let top = bounds.top + parseFloat(style.paddingTop) + before.length * lineHeight - editor.scrollTop;
+            left = Math.min(left, window.innerWidth - 300);
+            top = Math.min(top, window.innerHeight - 260);
+            dropdown.style.left = `${{Math.max(4, left)}}px`;
+            dropdown.style.top = `${{Math.max(4, top)}}px`;
+        }};
+        const showAutocomplete = (editor, manual = false) => {{
+            const dropdown = editor.closest(".editor-input")?.querySelector(".autocomplete");
+            const context = completionContext(editor, manual);
+            if (!dropdown || !context) {{ if (dropdown) dropdown.hidden = true; return; }}
+            const analysis = analysisByEditor.get(editor);
+            const candidates = new Map(
+                completionDefaults.map(([label, kind]) => [label, [kind, label]])
+            );
+            for (const symbol of analysis?.symbols || []) {{
+                const token = analysis.tokens.find(item => item.symbol === symbol.name);
+                candidates.set(symbol.name, [token?.type || "variable", symbol.name]);
+            }}
+            for (const completion of analysis?.completions || [])
+                candidates.set(completion.label, [completion.kind, completion.insertText]);
+            const prefix = context.prefix.toLowerCase();
+            const items = [...candidates]
+                .filter(([label]) => (!prefix || label.toLowerCase().startsWith(prefix)) && label !== context.prefix)
+                .sort(([left], [right]) => left.localeCompare(right))
+                .slice(0, 50);
+            if (!items.length) {{ dropdown.hidden = true; return; }}
+            dropdown.replaceChildren();
+            items.forEach(([label, [kind]], index) => {{
+                const item = document.createElement("div");
+                item.className = `autocomplete-item${{index === 0 ? " selected" : ""}}`;
+                item.dataset.index = String(index);
+                item.dataset.kind = kind;
+                const icon = document.createElement("span");
+                icon.className = "autocomplete-icon";
+                icon.textContent = kind.slice(0, 1).toUpperCase();
+                const name = document.createElement("span");
+                name.textContent = label;
+                const detail = document.createElement("span");
+                detail.className = "autocomplete-kind";
+                detail.textContent = kind;
+                item.append(icon, name, detail);
+                dropdown.append(item);
+            }});
+            completionState.set(editor, {{items, start: context.start, selected: 0}});
+            dropdown.hidden = false;
+            positionAutocomplete(editor, dropdown);
+        }};
+        const selectCompletion = (editor, direction) => {{
+            const dropdown = editor.closest(".editor-input")?.querySelector(".autocomplete");
+            const state = completionState.get(editor);
+            if (!dropdown || !state) return;
+            state.selected = (state.selected + direction + state.items.length) % state.items.length;
+            dropdown.querySelectorAll(".autocomplete-item").forEach((item, index) =>
+                item.classList.toggle("selected", index === state.selected)
+            );
+            dropdown.querySelector(".autocomplete-item.selected")?.scrollIntoView({{block: "nearest"}});
+        }};
+        const changeIndent = (editor, outdent = false) => {{
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            if (start === end) {{
+                if (outdent) {{
+                    const lineStart = editor.value.lastIndexOf("\n", start - 1) + 1;
+                    const beforeCaret = editor.value.slice(lineStart, start);
+                    const removable = beforeCaret.match(/(?:\t| {{1,4}})$/)?.[0] || "";
+                    if (removable)
+                        editor.setRangeText("", start - removable.length, start, "end");
+                }} else {{
+                    editor.setRangeText("    ", start, end, "end");
+                }}
+            }} else {{
+                const blockStart = editor.value.lastIndexOf("\n", start - 1) + 1;
+                let blockEnd = editor.value.indexOf("\n", end);
+                if (blockEnd < 0) blockEnd = editor.value.length;
+                const block = editor.value.slice(blockStart, blockEnd);
+                const changed = block.split("\n").map(line =>
+                    outdent ? line.replace(/^(?:\t| {{1,4}})/, "") : `    ${{line}}`
+                ).join("\n");
+                editor.setRangeText(changed, blockStart, blockEnd, "select");
+            }}
+            editor.dispatchEvent(new Event("input", {{bubbles: true}}));
+        }};
+        const acceptCompletion = (editor, index = null) => {{
+            const dropdown = editor.closest(".editor-input")?.querySelector(".autocomplete");
+            const state = completionState.get(editor);
+            if (!dropdown || !state) return;
+            const selected = index === null ? state.selected : index;
+            const candidate = state.items[selected];
+            const insertText = candidate?.[1]?.[1];
+            if (!insertText) return;
+            editor.setRangeText(insertText, state.start, editor.selectionStart, "end");
+            dropdown.hidden = true;
+            editor.dispatchEvent(new Event("input", {{bubbles: true}}));
         }};
         const renderAnalysis = (editor, analysis) => {{
             const layer = editor.closest(".editor-input")?.querySelector(".highlight-layer");
@@ -631,6 +971,8 @@ goal editor: View::web = """
             analysisByEditor.set(editor, analysis);
             syncEditorScroll(editor);
             highlightUsages(editor);
+            const dropdown = editor.closest(".editor-input")?.querySelector(".autocomplete");
+            if (dropdown && !dropdown.hidden) showAutocomplete(editor);
         }};
         const renderPendingSource = editor => {{
             const layer = editor.closest(".editor-input")?.querySelector(".highlight-layer");
@@ -645,7 +987,9 @@ goal editor: View::web = """
             const timer = setTimeout(async () => {{
                 if (!window.sic?.analyze) {{ requestAnalysis(editor); return; }}
                 try {{
-                    const analysis = await window.sic.analyze(editor.value);
+                    const analysis = await window.sic.analyze(
+                        editor.value, window.__sicCurrentFile || null
+                    );
                     if (analysisVersion.get(editor) === version && editor.isConnected)
                         renderAnalysis(editor, analysis);
                 }} catch (error) {{
@@ -662,10 +1006,59 @@ goal editor: View::web = """
         const updateAllEditors = () =>
             document.querySelectorAll(".source-editor").forEach(updateEditor);
         document.addEventListener("input", event => {{
-            if (event.target.matches?.(".source-editor")) updateEditor(event.target);
+            if (event.target.matches?.(".source-editor")) {{
+                hideDiagnosticTooltip();
+                updateEditor(event.target);
+                showAutocomplete(event.target);
+            }}
+        }});
+        document.addEventListener("keydown", event => {{
+            const editor = event.target.matches?.(".source-editor") ? event.target : null;
+            if (!editor) return;
+            const dropdown = editor.closest(".editor-input")?.querySelector(".autocomplete");
+            if ((event.ctrlKey || event.metaKey) && event.code === "Space") {{
+                event.preventDefault();
+                showAutocomplete(editor, true);
+            }} else if (dropdown && !dropdown.hidden && event.key === "ArrowDown") {{
+                event.preventDefault(); selectCompletion(editor, 1);
+            }} else if (dropdown && !dropdown.hidden && event.key === "ArrowUp") {{
+                event.preventDefault(); selectCompletion(editor, -1);
+            }} else if (dropdown && !dropdown.hidden && (event.key === "Enter" || (event.key === "Tab" && !event.shiftKey))) {{
+                event.preventDefault(); acceptCompletion(editor);
+            }} else if (dropdown && !dropdown.hidden && event.key === "Escape") {{
+                event.preventDefault(); dropdown.hidden = true;
+            }} else if (event.key === "Tab") {{
+                event.preventDefault();
+                if (dropdown) dropdown.hidden = true;
+                changeIndent(editor, event.shiftKey);
+            }}
+        }});
+        document.addEventListener("pointerdown", event => {{
+            const item = event.target.closest(".autocomplete-item");
+            if (!item) {{
+                if (!event.target.matches?.(".source-editor"))
+                    document.querySelectorAll(".autocomplete").forEach(menu => menu.hidden = true);
+                return;
+            }}
+            const editor = item.closest(".editor-input")?.querySelector(".source-editor");
+            if (!editor) return;
+            event.preventDefault();
+            acceptCompletion(editor, Number(item.dataset.index));
+            editor.focus();
+        }});
+        document.addEventListener("mousemove", event => {{
+            const editor = event.target.matches?.(".source-editor") ? event.target : null;
+            if (editor) showDiagnosticTooltip(editor, event);
+            else hideDiagnosticTooltip();
+        }});
+        document.addEventListener("mouseout", event => {{
+            if (event.target.matches?.(".source-editor")) hideDiagnosticTooltip();
         }});
         document.addEventListener("scroll", event => {{
-            if (event.target.matches?.(".source-editor")) syncEditorScroll(event.target);
+            if (event.target.matches?.(".source-editor")) {{
+                syncEditorScroll(event.target);
+                hideDiagnosticTooltip();
+            }}
         }}, true);
         document.addEventListener("selectionchange", () => {{
             if (document.activeElement?.matches?.(".source-editor"))
@@ -673,6 +1066,442 @@ goal editor: View::web = """
         }});
         document.addEventListener("sic:bindings-hydrated", updateAllEditors);
         requestAnimationFrame(updateAllEditors);
+    }}
+
+    if (!window.__sicWorkspaceManagerInstalled) {{
+        window.__sicWorkspaceManagerInstalled = true;
+        let workspaceTree = null;
+        let currentFile = "";
+        let selectedPath = "";
+        let selectedType = "";
+        window.__sicCurrentFile = "";
+        let savedContent = "";
+        let dirty = false;
+        let workspaceGoals = [];
+        let selectedGoal = null;
+        let lastRunOutput = "Wähle ein Goal und starte es mit ▶.";
+
+        const sourceEditor = () => document.querySelector(".source-editor");
+        const setSaveStatus = (text, kind = "") => {{
+            document.querySelectorAll("[data-save-status]").forEach(node => {{
+                node.textContent = text;
+                node.className = `save-status ${{kind}}`;
+            }});
+        }};
+        const updateFileLabels = () => {{
+            const name = currentFile.split("/").at(-1) || "Keine Datei";
+            document.querySelectorAll("[data-current-file]").forEach(node => node.textContent = name);
+            document.querySelectorAll("[data-current-path]").forEach(node => node.textContent = currentFile || "Keine Datei");
+            document.querySelectorAll(".run-config span:first-child").forEach(node =>
+                node.textContent = selectedGoal?.label || "Goal wählen"
+            );
+            document.querySelectorAll(".editor-tab").forEach(node => node.classList.toggle("dirty", dirty));
+            document.querySelectorAll("[data-dirty-indicator]").forEach(node => node.textContent = dirty ? "●" : "×");
+            document.querySelectorAll("[data-workspace-file]").forEach(node =>
+                node.classList.toggle(
+                    "active",
+                    selectedType === "file" && node.dataset.workspaceFile === selectedPath
+                )
+            );
+            document.querySelectorAll("[data-workspace-path]").forEach(node =>
+                node.classList.toggle("workspace-selected", node.dataset.workspacePath === selectedPath)
+            );
+        }};
+        const setDirty = value => {{
+            dirty = value;
+            setSaveStatus(value ? "Nicht gespeichert" : "Bereit");
+            updateFileLabels();
+        }};
+        const fileClass = name => name.endsWith(".md") ? " markdown" : "";
+        const moreButton = entry => {{
+            const button = document.createElement("button");
+            button.className = "workspace-more";
+            button.type = "button";
+            button.title = `Aktionen für ${{entry.name}}`;
+            button.setAttribute("aria-label", button.title);
+            button.setAttribute("aria-expanded", "false");
+            button.dataset.workspaceMenuPath = entry.path;
+            button.dataset.workspaceMenuType = entry.type;
+            button.textContent = "⋮";
+            return button;
+        }};
+        const appendTreeEntries = (parent, entries) => {{
+            for (const entry of entries) {{
+                const item = document.createElement("li");
+                if (entry.type === "directory") {{
+                    const details = document.createElement("details");
+                    details.open = true;
+                    const summary = document.createElement("summary");
+                    summary.dataset.workspacePath = entry.path;
+                    summary.dataset.workspaceType = entry.type;
+                    const name = document.createElement("span");
+                    name.className = "workspace-entry-name";
+                    name.textContent = entry.name;
+                    summary.append(name, moreButton(entry));
+                    const children = document.createElement("ul");
+                    appendTreeEntries(children, entry.children || []);
+                    details.append(summary, children);
+                    item.append(details);
+                }} else {{
+                    const row = document.createElement("div");
+                    row.className = "workspace-file-row";
+                    const button = document.createElement("button");
+                    button.className = `file-tree-file${{fileClass(entry.name)}}`;
+                    button.dataset.workspaceFile = entry.path;
+                    button.dataset.workspacePath = entry.path;
+                    button.dataset.workspaceType = entry.type;
+                    button.textContent = entry.name;
+                    row.append(button, moreButton(entry));
+                    item.append(row);
+                }}
+                parent.append(item);
+            }}
+        }};
+        const renderWorkspace = () => {{
+            if (!workspaceTree) return;
+            document.querySelectorAll("[data-workspace-name], [data-workspace-label]")
+                .forEach(node => node.textContent = workspaceTree.name);
+            document.querySelectorAll("[data-workspace-tree]").forEach(tree => {{
+                tree.replaceChildren();
+                appendTreeEntries(tree, workspaceTree.children || []);
+            }});
+            updateFileLabels();
+        }};
+        const refreshGoals = async () => {{
+            workspaceGoals = await window.sic.workspace.goals();
+            if (selectedGoal)
+                selectedGoal = workspaceGoals.find(goal => goal.path === selectedGoal.path) || null;
+            if (!selectedGoal)
+                selectedGoal = workspaceGoals.find(goal => goal.path === currentFile) || workspaceGoals[0] || null;
+            updateFileLabels();
+        }};
+        const refreshWorkspace = async () => {{
+            if (!window.sic?.workspace) {{ setTimeout(refreshWorkspace, 50); return; }}
+            try {{
+                workspaceTree = await window.sic.workspace.list();
+                renderWorkspace();
+                try {{
+                    await refreshGoals();
+                }} catch (error) {{
+                    console.error("[SIC] Goals konnten nicht geladen werden", error);
+                    setSaveStatus(`Goals nicht verfügbar: ${{error.message}}`, "error");
+                }}
+                if (!currentFile) {{
+                    const first = workspaceTree.children?.find(entry => entry.type === "file" && entry.name.endsWith(".sic"));
+                    if (first) await openWorkspaceFile(first.path, false);
+                }}
+            }} catch (error) {{
+                setSaveStatus(error.message, "error");
+            }}
+        }};
+        const openWorkspaceFile = async (path, confirmDirty = true) => {{
+            if (confirmDirty && dirty && !window.confirm("Ungespeicherte Änderungen verwerfen?")) return;
+            try {{
+                const file = await window.sic.workspace.read(path);
+                const editor = sourceEditor();
+                if (!editor) return;
+                currentFile = file.path;
+                selectedPath = file.path;
+                selectedType = "file";
+                window.__sicCurrentFile = file.path;
+                savedContent = file.content;
+                editor.value = file.content;
+                editor.setAttribute("sic:bind-value", file.content);
+                editor.selectionStart = editor.selectionEnd = 0;
+                setDirty(false);
+                editor.dispatchEvent(new Event("input", {{bubbles: true}}));
+                editor.focus();
+                updateFileLabels();
+            }} catch (error) {{
+                setSaveStatus(error.message, "error");
+            }}
+        }};
+        const saveWorkspaceFile = async () => {{
+            const editor = sourceEditor();
+            if (!editor || !currentFile) return;
+            setSaveStatus("Speichert…");
+            try {{
+                await window.sic.workspace.write(currentFile, editor.value);
+                savedContent = editor.value;
+                editor.setAttribute("sic:bind-value", savedContent);
+                dirty = false;
+                setSaveStatus("Gespeichert", "saved");
+                updateFileLabels();
+            }} catch (error) {{
+                setSaveStatus(error.message, "error");
+            }}
+        }};
+        const runGoalMenu = () => {{
+            let menu = document.querySelector(".run-goal-menu");
+            if (!menu) {{
+                menu = document.createElement("div");
+                menu.className = "run-goal-menu";
+                menu.hidden = true;
+                document.body.append(menu);
+            }}
+            return menu;
+        }};
+        const hideRunGoalMenu = () => runGoalMenu().hidden = true;
+        const showRunGoalMenu = button => {{
+            const menu = runGoalMenu();
+            menu.replaceChildren(...workspaceGoals.map((goal, index) => {{
+                const item = document.createElement("button");
+                item.type = "button";
+                item.dataset.runGoal = String(index);
+                item.classList.toggle("selected", selectedGoal?.path === goal.path);
+                const label = document.createElement("span");
+                label.textContent = goal.label;
+                const detail = document.createElement("small");
+                detail.textContent = goal.path;
+                item.append(label, detail);
+                return item;
+            }}));
+            if (!workspaceGoals.length) menu.textContent = "Keine ausführbaren Goals";
+            menu.hidden = false;
+            const bounds = button.getBoundingClientRect();
+            const menuBounds = menu.getBoundingClientRect();
+            menu.style.left = `${{Math.max(8, Math.min(bounds.left, window.innerWidth - menuBounds.width - 8))}}px`;
+            menu.style.top = `${{Math.max(8, bounds.top - menuBounds.height - 4)}}px`;
+        }};
+        const parseGoalArgument = (input, raw) => {{
+            if (input.type === "String") return raw;
+            if (input.type === "Int") {{
+                const value = Number(raw);
+                if (!Number.isInteger(value)) throw new Error(`${{input.name}} erwartet Int`);
+                return value;
+            }}
+            if (input.type === "Float") {{
+                const value = Number(raw);
+                if (!Number.isFinite(value)) throw new Error(`${{input.name}} erwartet Float`);
+                return value;
+            }}
+            if (input.type === "Bool") {{
+                if (raw === "true") return true;
+                if (raw === "false") return false;
+                throw new Error(`${{input.name}} erwartet true oder false`);
+            }}
+            return JSON.parse(raw);
+        }};
+        const displayRunOutput = () => {{
+            document.querySelectorAll("[data-run-output]").forEach(node => node.textContent = lastRunOutput);
+            document.querySelectorAll("[data-run-title]").forEach(node =>
+                node.textContent = `Run: ${{selectedGoal?.label || "Goal"}}`
+            );
+        }};
+        const runSelectedGoal = async () => {{
+            if (!selectedGoal) {{ setSaveStatus("Kein Goal ausgewählt", "error"); return; }}
+            if (dirty && currentFile === selectedGoal.path) {{
+                await saveWorkspaceFile();
+                if (dirty) return;
+                await refreshGoals();
+            }}
+            const arguments_ = {{}};
+            try {{
+                for (const input of selectedGoal.inputs || []) {{
+                    const raw = window.prompt(`Argument ${{input.name}} (${{input.type}}):`, "");
+                    if (raw === null) return;
+                    arguments_[input.name] = parseGoalArgument(input, raw);
+                }}
+                setSaveStatus(`Führe ${{selectedGoal.label}} aus…`);
+                const result = await window.sic.workspace.run(selectedGoal.path, arguments_);
+                const value = typeof result.value === "string"
+                    ? result.value : JSON.stringify(result.value, null, 2);
+                lastRunOutput = `${{result.stdout || ""}}${{result.stdout ? "\n" : ""}}> ${{result.goal}}\n${{value}}`;
+                setSaveStatus("Ausführung abgeschlossen", "saved");
+            }} catch (error) {{
+                lastRunOutput = `[Fehler] ${{error.message}}`;
+                setSaveStatus(error.message, "error");
+            }}
+            const shell = document.querySelector(".ide-shell");
+            if (!shell?.classList.contains("bottom-run"))
+                document.querySelector('.tool-stripe.left button[title="Run"]')?.click();
+            displayRunOutput();
+        }};
+        const parentPath = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+        const childPath = (directory, name) => directory ? `${{directory}}/${{name}}` : name;
+        const selectedDirectory = () => selectedType === "directory"
+            ? selectedPath : parentPath(selectedPath);
+        const createWorkspaceFile = async directory => {{
+            const name = window.prompt("Name der neuen Datei:", "new.sic");
+            if (!name) return;
+            const path = childPath(directory, name);
+            try {{
+                await window.sic.workspace.write(path, "");
+                await refreshWorkspace();
+                await openWorkspaceFile(path);
+            }} catch (error) {{ setSaveStatus(error.message, "error"); }}
+        }};
+        const createWorkspaceDirectory = async directory => {{
+            const name = window.prompt("Name des neuen Ordners:", "new-folder");
+            if (!name) return;
+            const path = childPath(directory, name);
+            try {{
+                await window.sic.workspace.mkdir(path);
+                selectedPath = path;
+                selectedType = "directory";
+                await refreshWorkspace();
+            }} catch (error) {{ setSaveStatus(error.message, "error"); }}
+        }};
+        const renameWorkspacePath = async () => {{
+            if (!selectedPath) return;
+            if (dirty && (currentFile === selectedPath || currentFile.startsWith(`${{selectedPath}}/`))) {{
+                window.alert("Bitte die geöffnete Datei vor dem Umbenennen speichern.");
+                return;
+            }}
+            const oldName = selectedPath.split("/").at(-1);
+            const newName = window.prompt("Neuer Name:", oldName);
+            if (!newName || newName === oldName) return;
+            const target = childPath(parentPath(selectedPath), newName);
+            try {{
+                await window.sic.workspace.rename(selectedPath, target);
+                if (currentFile === selectedPath || currentFile.startsWith(`${{selectedPath}}/`)) {{
+                    currentFile = target + currentFile.slice(selectedPath.length);
+                    window.__sicCurrentFile = currentFile;
+                }}
+                selectedPath = target;
+                await refreshWorkspace();
+                updateFileLabels();
+            }} catch (error) {{ setSaveStatus(error.message, "error"); }}
+        }};
+        const deleteWorkspacePath = async () => {{
+            if (!selectedPath) return;
+            const containsCurrent = currentFile === selectedPath || currentFile.startsWith(`${{selectedPath}}/`);
+            const warning = dirty && containsCurrent
+                ? "Die Auswahl enthält ungespeicherte Änderungen. Trotzdem endgültig löschen?"
+                : `„${{selectedPath}}“ endgültig löschen?`;
+            if (!window.confirm(warning)) return;
+            try {{
+                await window.sic.workspace.delete(selectedPath);
+                if (containsCurrent) {{
+                    currentFile = "";
+                    window.__sicCurrentFile = "";
+                    savedContent = "";
+                    dirty = false;
+                    const editor = sourceEditor();
+                    if (editor) {{
+                        editor.value = "";
+                        editor.dispatchEvent(new Event("input", {{bubbles: true}}));
+                    }}
+                }}
+                selectedPath = "";
+                selectedType = "";
+                await refreshWorkspace();
+            }} catch (error) {{ setSaveStatus(error.message, "error"); }}
+        }};
+        const contextMenu = () => {{
+            let menu = document.querySelector(".workspace-context-menu");
+            if (!menu) {{
+                menu = document.createElement("div");
+                menu.className = "workspace-context-menu";
+                menu.hidden = true;
+                document.body.append(menu);
+            }}
+            return menu;
+        }};
+        const hideWorkspaceMenu = () => {{
+            contextMenu().hidden = true;
+            document.querySelectorAll(".workspace-more[aria-expanded='true']")
+                .forEach(button => button.setAttribute("aria-expanded", "false"));
+        }};
+        const showWorkspaceMenu = button => {{
+            hideWorkspaceMenu();
+            selectedPath = button.dataset.workspaceMenuPath;
+            selectedType = button.dataset.workspaceMenuType;
+            updateFileLabels();
+            const menu = contextMenu();
+            const actions = selectedType === "directory"
+                ? [["new-file", "Neue Datei"], ["new-directory", "Neuer Ordner"], ["rename", "Umbenennen"], ["delete", "Löschen"]]
+                : [["rename", "Umbenennen"], ["delete", "Löschen"]];
+            menu.replaceChildren(...actions.map(([action, label]) => {{
+                const item = document.createElement("button");
+                item.type = "button";
+                item.dataset.workspaceAction = action;
+                item.textContent = label;
+                if (action === "delete") item.className = "danger";
+                return item;
+            }}));
+            menu.hidden = false;
+            button.setAttribute("aria-expanded", "true");
+            const bounds = button.getBoundingClientRect();
+            const menuBounds = menu.getBoundingClientRect();
+            menu.style.left = `${{Math.max(8, Math.min(bounds.right - menuBounds.width, window.innerWidth - menuBounds.width - 8))}}px`;
+            menu.style.top = `${{Math.max(8, Math.min(bounds.bottom + 3, window.innerHeight - menuBounds.height - 8))}}px`;
+        }};
+        document.addEventListener("input", event => {{
+            if (event.target.matches?.(".source-editor") && currentFile)
+                setDirty(event.target.value !== savedContent);
+        }});
+        document.addEventListener("click", event => {{
+            const goalOption = event.target.closest("[data-run-goal]");
+            if (goalOption) {{
+                selectedGoal = workspaceGoals[Number(goalOption.dataset.runGoal)] || null;
+                hideRunGoalMenu();
+                updateFileLabels();
+                return;
+            }}
+            const runConfig = event.target.closest(".run-config");
+            if (runConfig) {{
+                showRunGoalMenu(runConfig);
+                return;
+            }}
+            if (event.target.closest(".status-actions .run")) {{
+                hideRunGoalMenu();
+                runSelectedGoal();
+                return;
+            }}
+            hideRunGoalMenu();
+            const menuButton = event.target.closest("[data-workspace-menu-path]");
+            if (menuButton) {{
+                event.preventDefault();
+                event.stopPropagation();
+                showWorkspaceMenu(menuButton);
+                return;
+            }}
+            const action = event.target.closest("[data-workspace-action]")?.dataset.workspaceAction;
+            if (action) {{
+                hideWorkspaceMenu();
+                if (action === "new-file") createWorkspaceFile(selectedPath);
+                else if (action === "new-directory") createWorkspaceDirectory(selectedPath);
+                else if (action === "rename") renameWorkspacePath();
+                else if (action === "delete") deleteWorkspacePath();
+                return;
+            }}
+            hideWorkspaceMenu();
+            const file = event.target.closest("[data-workspace-file]");
+            if (file) {{
+                selectedPath = file.dataset.workspaceFile;
+                selectedType = "file";
+                updateFileLabels();
+                openWorkspaceFile(file.dataset.workspaceFile);
+                return;
+            }}
+            const pathEntry = event.target.closest("[data-workspace-path]");
+            if (pathEntry) {{
+                selectedPath = pathEntry.dataset.workspacePath;
+                selectedType = pathEntry.dataset.workspaceType;
+                updateFileLabels();
+                return;
+            }}
+            if (event.target.closest("[data-workspace-refresh]")) {{ refreshWorkspace(); return; }}
+            if (event.target.closest("[data-workspace-new-directory]")) {{
+                createWorkspaceDirectory(selectedDirectory());
+                return;
+            }}
+            if (event.target.closest("[data-workspace-new]"))
+                createWorkspaceFile(selectedDirectory());
+        }});
+        document.addEventListener("keydown", event => {{
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {{
+                event.preventDefault();
+                saveWorkspaceFile();
+            }}
+        }});
+        document.addEventListener("sic:bindings-hydrated", () => {{
+            renderWorkspace();
+            updateFileLabels();
+            displayRunOutput();
+        }});
+        setTimeout(refreshWorkspace, 0);
     }}
 
     if (window.__sicEditorResizeInstalled) return;

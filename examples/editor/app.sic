@@ -2,5 +2,6 @@ goal app: App::web = {
     title: "SIC Editor",
     port: 8001,
     pages: ["frontend/app.sic"],
-    backend: "backend"
+    backend: "backend",
+    workspace: "../basic"
 }

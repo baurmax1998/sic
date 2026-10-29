@@ -1,0 +1,3 @@
+goal greeting: String = 
+    print::console::std(prefix + name::name())                                                         
+let prefix = "Hallo "  

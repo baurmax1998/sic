@@ -113,7 +113,7 @@ class ModuleRegistry:
         from .parser import parse
 
         program = parse(source)
-        origin = (module, package)
+        origin = (module, package) if package else (module,)
         # Effektdeklarationen müssen bereits während der Prüfung desselben
         # Moduls über ihren Herkunftspfad auflösbar sein.
         from .checking.base import TypeCheckerBase
@@ -153,7 +153,7 @@ class ModuleRegistry:
             # Wenn Modul und Goal gleich heißen, ist `layout::frontend`
             # eindeutig; `layout::layout::frontend` bleibt als voller Pfad
             # verfügbar, muss innerhalb eines Pakets aber nicht geschrieben werden.
-            if binding.is_goal and binding.name == module:
+            if binding.is_goal and binding.name == module and package:
                 short_path = (binding.name, package)
                 if (
                     short_path in self._functions

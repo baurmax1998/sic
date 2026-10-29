@@ -50,9 +50,8 @@ goal bottomPanel: Component::web = """
             </div>
         </div>
         <div class="bottom-content run-content">
-            <div class="bottom-titlebar"><strong>Run: app.sic</strong><button title="Schließen" sic:onclick="{close_left}">×</button></div>
-            <pre class="console-screen">uv run sic serve examples/editor/app.sic
-SIC Editor läuft auf http://127.0.0.1:8001</pre>
+            <div class="bottom-titlebar"><strong data-run-title>Run</strong><button title="Schließen" sic:onclick="{close_left}">×</button></div>
+            <pre class="console-screen" data-run-output>Wähle ein Goal und starte es mit ▶.</pre>
         </div>
     </div>
     <div class="bottom-right">

@@ -38,6 +38,22 @@ def test_source_analysis_returns_semantic_tokens_usages_and_diagnostics():
     )
 
 
+def test_plain_workspace_module_uses_file_name_as_origin():
+    registry = standard_registry()
+    registry.register_source("new", "", 'goal name: String = "Max"')
+    source = (
+        'goal greeting: String = print::console::std(prefix + name::new())\n'
+        'let prefix = "Hallo "'
+    )
+
+    analysis = analyze_source(source, registry)
+    assert analysis["diagnostics"] == []
+    assert {
+        "label": "name::new", "insertText": "name::new()", "kind": "function",
+    } in analysis["completions"]
+    assert run(source, registry).value == "Hallo Max"
+
+
 def test_redundant_definition_annotation_is_rejected():
     source = """
     goal total: Int =

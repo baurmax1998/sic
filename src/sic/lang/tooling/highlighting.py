@@ -124,10 +124,33 @@ def analyze_source(source: str, registry: Any | None = None) -> dict[str, Any]:
         {"name": name, "occurrences": ranges}
         for name, ranges in occurrences.items()
     ]
+    completions: list[dict[str, str]] = []
+    if registry is not None:
+        seen: set[str] = set()
+        for path in registry.paths():
+            symbol, origin = path[0], path[1:]
+            label = "::".join(path)
+            if label in seen:
+                continue
+            seen.add(label)
+            if registry.has_calculation(symbol, origin):
+                kind, insert_text = "function", label + "()"
+            elif registry.has_function(symbol, origin):
+                kind, insert_text = "function", label + "()"
+            elif registry.has_type(symbol, origin):
+                kind, insert_text = "type", label
+            elif registry.has_effect(symbol, origin):
+                kind, insert_text = "effect", label
+            else:  # pragma: no cover - paths() besteht nur aus diesen Registern
+                continue
+            completions.append({
+                "label": label, "insertText": insert_text, "kind": kind,
+            })
     return {
         "tokens": public_tokens,
         "diagnostics": diagnostics,
         "symbols": symbols,
+        "completions": completions,
     }
 
 
