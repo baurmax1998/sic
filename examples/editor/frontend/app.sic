@@ -527,6 +527,28 @@ goal editor: View::web = """
         const saved = localStorage.getItem(`sic-editor-${{name}}-size`);
         if (saved) root.style.setProperty(property, `${{saved}}px`);
     }}
+
+    if (!window.__sicEditorLineNumbersInstalled) {{
+        window.__sicEditorLineNumbersInstalled = true;
+        const updateLineNumbers = editor => {{
+            const gutter = editor.closest(".editor-canvas")?.querySelector(".line-numbers");
+            if (!gutter) return;
+            const lineCount = editor.value.split("\n").length;
+            gutter.textContent = [...Array(lineCount)].map((_, index) => index + 1).join("\n");
+            gutter.scrollTop = editor.scrollTop;
+        }};
+        const updateAllLineNumbers = () =>
+            document.querySelectorAll(".source-editor").forEach(updateLineNumbers);
+        document.addEventListener("input", event => {{
+            if (event.target.matches?.(".source-editor")) updateLineNumbers(event.target);
+        }});
+        document.addEventListener("scroll", event => {{
+            if (event.target.matches?.(".source-editor")) updateLineNumbers(event.target);
+        }}, true);
+        document.addEventListener("sic:bindings-hydrated", updateAllLineNumbers);
+        requestAnimationFrame(updateAllLineNumbers);
+    }}
+
     if (window.__sicEditorResizeInstalled) return;
     window.__sicEditorResizeInstalled = true;
 

@@ -500,6 +500,9 @@ function hydrateSicBindings(container = document) {{
       node.value = node.getAttribute("sic:bind-value") || "";
     }}
   }}
+  document.dispatchEvent(new CustomEvent("sic:bindings-hydrated", {{
+    detail: {{container}}
+  }}));
 }}
 hydrateSicBindings();
 socket.addEventListener("message", event => {{

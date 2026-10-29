@@ -84,6 +84,7 @@ def test_sic_web_config_and_static_build(tmp_path):
     assert 'console.info("[SIC] Aktion gesendet"' in document
     assert 'closestSicHandler(event.target, "sic:oninput")' in document
     assert "function hydrateSicBindings" in document
+    assert 'CustomEvent("sic:bindings-hydrated"' in document
 
 
 def test_web_goal_requires_standard_library_type(tmp_path):
