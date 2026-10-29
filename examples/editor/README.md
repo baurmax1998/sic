@@ -26,5 +26,11 @@ Danach den Editor unter <http://127.0.0.1:8001> öffnen.
 ausgewählt und mit `▶` ausgeführt werden. Benötigte Eingaben werden vor dem
 Start abgefragt; Ergebnis und Konsolenausgabe erscheinen im Run-Fenster.
 
+Ein Klick auf eine Zeilennummer setzt oder entfernt einen Breakpoint. `D`
+startet das ausgewählte Goal im Debugger. Das Debug-Fenster bietet Fortsetzen,
+Schritt über und Stop sowie Stack-, Variablen- und Laufzeitausgabe. Entsprechend
+der deklarativen Auswertung liegen Debug-Schritte auf `goal`-, `let`- und
+`var`-Bindungen.
+
 Der Editor unterstützt außerdem Zeilennummern, eigenes semantisches
 Syntax-Highlighting, Diagnosen, Verwendungshervorhebung und Autocomplete.

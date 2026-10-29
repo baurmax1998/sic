@@ -8,44 +8,32 @@ goal bottomPanel: Component::web = """
         </div>
         <div class="bottom-content debug-content">
             <div class="bottom-titlebar">
-                <strong>Debug: app.sic</strong>
+                <strong data-debug-title>Debug</strong>
                 <div class="debug-actions" aria-label="Debug-Aktionen">
-                    <span class="continue" title="Resume">▶</span><span title="Pause">Ⅱ</span>
-                    <span title="Step Over">↷</span><span title="Step Into">↓</span>
-                    <span title="Step Out">↑</span><span class="stop" title="Stop">■</span>
+                    <button class="continue" title="Fortsetzen" data-debug-action="continue">▶</button>
+                    <button title="Schritt über" data-debug-action="step">↷</button>
+                    <button class="stop" title="Stoppen" data-debug-action="stop">■</button>
                 </div>
                 <button title="Schließen" sic:onclick="{close_left}">×</button>
             </div>
             <div class="debug-layout">
                 <div class="debug-section debug-frames">
                     <strong>Threads & Frames</strong>
-                    <ul class="debug-tree">
-                        <li>▾ Main Thread</li>
-                        <li class="selected">　app.sic:1 · greeting</li>
-                        <li>　runtime.py:128 · evaluate</li>
-                        <li>　runner.py:42 · run</li>
+                    <ul class="debug-tree" data-debug-frames>
+                        <li>Kein aktiver Debug-Lauf</li>
                     </ul>
                 </div>
                 <div class="resize-handle resize-debug resize-debug-frames" data-resize="debug-frames" aria-hidden="true"></div>
                 <div class="debug-section debug-variables-section">
                     <strong>Variables</strong>
-                    <div class="debug-variables">
-                        <div class="debug-row"><span class="debug-name">source</span><span class="debug-value">"goal greeting: String = …" <span class="debug-type">String</span></span></div>
-                        <div class="debug-row"><span class="debug-name">prefix</span><span class="debug-value">"Hallo " <span class="debug-type">String</span></span></div>
-                        <div class="debug-row"><span class="debug-name">name</span><span class="debug-value">"SIC" <span class="debug-type">String</span></span></div>
-                        <div class="debug-row"><span class="debug-name">leftTool</span><span class="debug-value">"project" <span class="debug-type">String</span></span></div>
+                    <div class="debug-variables" data-debug-variables>
+                        <div class="debug-row"><span class="debug-name">–</span><span class="debug-value">Keine Werte</span></div>
                     </div>
-                    <div class="debug-subtitle">Watches</div>
-                    <div class="debug-row"><span>source</span><span class="debug-value">String</span></div>
-                    <div class="watch-add">＋ Add watch…</div>
                 </div>
                 <div class="resize-handle resize-debug resize-debug-variables" data-resize="debug-variables" aria-hidden="true"></div>
                 <div class="debug-section debug-log-section">
                     <strong>Log Output</strong>
-                    <pre class="debug-log"><span class="info">[debug]</span> View wird kompiliert
-<span class="info">[debug]</span> greeting · app.sic:1
-<span class="success">[info]</span> WebSocket verbunden
-<span class="success">[info]</span> Haltepunkt erreicht</pre>
+                    <pre class="debug-log" data-debug-log>Starte ein Goal mit D.</pre>
                 </div>
             </div>
         </div>

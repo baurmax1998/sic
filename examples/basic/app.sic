@@ -1,3 +1,4 @@
 goal greeting: String = 
-    print::console::std(prefix + name::name())                                                         
+    print::console::std(prefix + some_name)
+let some_name = name::name()
 let prefix = "Hallo "  

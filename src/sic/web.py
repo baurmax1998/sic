@@ -593,7 +593,8 @@ const workspace = {{
   rename: (path, newPath) => request({{type: "workspace-rename", path, newPath}}),
   delete: path => request({{type: "workspace-delete", path}}),
   goals: () => request({{type: "workspace-goals"}}),
-  run: (path, values = {{}}) => request({{type: "workspace-run", path, arguments: values}})
+  run: (path, values = {{}}) => request({{type: "workspace-run", path, arguments: values}}),
+  debug: (path, values = {{}}) => request({{type: "workspace-debug", path, arguments: values}})
 }};
 async function call(name, values = {{}}) {{
   definition(name);
@@ -1122,7 +1123,7 @@ def create_app(config_path: str | Path = "app.sic"):
                         else:
                             path.unlink()
                         result = {"path": message.get("path"), "deleted": True}
-                    elif kind == "workspace-run":
+                    elif kind in {"workspace-run", "workspace-debug"}:
                         if not path.is_file() or path.suffix != ".sic":
                             raise ValueError("Nur SIC-Dateien können ausgeführt werden")
                         arguments = message.get("arguments", {})
@@ -1137,20 +1138,55 @@ def create_app(config_path: str | Path = "app.sic"):
                         if missing or unknown:
                             name = sorted(missing or unknown)[0]
                             raise ValueError(f"Ungültiges Goal-Argument: {name}")
+                        def json_value(value: Any) -> Any:
+                            try:
+                                json.dumps(value)
+                            except (TypeError, ValueError):
+                                return repr(value)
+                            return value
+
+                        trace: list[dict[str, Any]] = []
+                        source_by_module = {
+                            item.stem: item for item in config.workspace.rglob("*.sic")
+                            if ".out" not in item.relative_to(config.workspace).parts
+                        }
+
+                        def record_trace(evaluator: Evaluator, name: str, value: Any) -> None:
+                            module = evaluator.identity_origin[0] if evaluator.identity_origin else path.stem
+                            source_file = source_by_module.get(module, path)
+                            binding = next(
+                                item for item in evaluator.checked.program.bindings
+                                if item.name == name
+                            )
+                            source_text = source_file.read_text(encoding="utf-8")
+                            start = binding.span.start if binding.span is not None else 0
+                            variables = {
+                                **{key: json_value(item) for key, item in evaluator.overrides.items()},
+                                **{key: json_value(item) for key, item in evaluator.values.items()},
+                                **{key: json_value(item) for key, item in evaluator.state.items()},
+                            }
+                            trace.append({
+                                "name": name,
+                                "path": source_file.relative_to(config.workspace).as_posix(),
+                                "line": source_text.count("\n", 0, start) + 1,
+                                "value": json_value(value),
+                                "variables": variables,
+                            })
+
                         output = io.StringIO()
                         with redirect_stdout(output):
-                            execution = Evaluator(checked, run_registry, arguments).run()
-                        value = execution.value
-                        try:
-                            json.dumps(value)
-                        except (TypeError, ValueError):
-                            value = repr(value)
+                            execution = Evaluator(
+                                checked, run_registry, arguments, (path.stem,),
+                                trace_callback=record_trace if kind == "workspace-debug" else None,
+                            ).run()
                         result = {
                             "goal": checked.program.goal.name,
                             "path": path.relative_to(config.workspace).as_posix(),
-                            "value": value,
+                            "value": json_value(execution.value),
                             "stdout": output.getvalue(),
                         }
+                        if kind == "workspace-debug":
+                            result["trace"] = trace
                     else:
                         raise ValueError("Unbekannte Workspace-Operation")
             except (LangError, OSError, UnicodeError, ValueError) as exc:
@@ -1322,7 +1358,7 @@ def create_app(config_path: str | Path = "app.sic"):
                         and message.get("type") in {
                             "workspace-list", "workspace-read", "workspace-write",
                             "workspace-mkdir", "workspace-rename", "workspace-delete",
-                            "workspace-goals", "workspace-run",
+                            "workspace-goals", "workspace-run", "workspace-debug",
                         }
                     ):
                         await execute_workspace(message)

@@ -190,6 +190,17 @@ def test_workspace_api_lists_reads_writes_and_contains_paths(tmp_path):
             assert execution["value"] == 42
 
             websocket.send_json({
+                "type": "workspace-debug", "id": "debug", "path": "app.sic",
+                "arguments": {},
+            })
+            debug = websocket.receive_json()["result"]
+            assert debug["value"] == 42
+            assert [(item["path"], item["name"]) for item in debug["trace"]] == [
+                ("new.sic", "value"), ("app.sic", "answer"),
+            ]
+            assert all(item["line"] == 1 for item in debug["trace"])
+
+            websocket.send_json({
                 "type": "workspace-write", "id": "3", "path": "src/new.sic",
                 "content": 'goal value: String = "neu"\n',
             })

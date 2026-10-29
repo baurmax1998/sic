@@ -301,8 +301,13 @@ goal editor: View::web = """
         text-align: right;
         white-space: pre;
         user-select: none;
+        pointer-events: auto;
         font: 0.88rem/1.55 "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
     }}
+    .line-number {{ display: block; min-height: 1.55em; cursor: pointer; }}
+    .line-number.breakpoint {{ color: #ffffff; }}
+    .line-number.breakpoint::before {{ content: "●"; color: #d64f4b; margin-right: 0.3rem; }}
+    .line-number.debug-current {{ background: #665b2f; color: #ffffff; }}
     .editor-input {{ position: relative; min-width: 0; min-height: 0; overflow: visible; }}
     .highlight-layer, .source-editor {{
         position: absolute;
@@ -534,15 +539,18 @@ goal editor: View::web = """
         gap: 0.15rem;
         margin-right: 0.45rem;
     }}
-    .debug-actions span {{
+    .debug-actions button {{
         display: grid;
         place-items: center;
         min-width: 1.35rem;
         height: 1.35rem;
+        padding: 0;
+        border: 0;
         border-radius: 3px;
+        background: transparent;
         color: #bdbdbd;
     }}
-    .debug-actions span:hover {{ background: #505254; }}
+    .debug-actions button:hover {{ background: #505254; }}
     .debug-actions .continue {{ color: #62b543; }}
     .debug-actions .stop {{ color: #d65c5c; }}
     .debug-layout {{
@@ -722,6 +730,7 @@ goal editor: View::web = """
         const analysisVersion = new WeakMap();
         const analysisTimer = new WeakMap();
         const completionState = new WeakMap();
+        window.__sicBreakpoints ||= new Map();
         const completionDefaults = [
             ["goal", "keyword"], ["let", "keyword"], ["var", "keyword"],
             ["if", "keyword"], ["then", "keyword"], ["else", "keyword"],
@@ -737,7 +746,20 @@ goal editor: View::web = """
             const gutter = editor.closest(".editor-canvas")?.querySelector(".line-numbers");
             if (!gutter) return;
             const lineCount = editor.value.split("\n").length;
-            gutter.textContent = [...Array(lineCount)].map((_, index) => index + 1).join("\n");
+            const path = window.__sicCurrentFile || "";
+            const breakpoints = window.__sicBreakpoints.get(path) || new Set();
+            const current = window.__sicDebugLocation;
+            gutter.replaceChildren(...[...Array(lineCount)].map((_, index) => {{
+                const line = document.createElement("span");
+                line.className = "line-number";
+                line.dataset.line = String(index + 1);
+                line.textContent = String(index + 1);
+                line.classList.toggle("breakpoint", breakpoints.has(index + 1));
+                line.classList.toggle(
+                    "debug-current", current?.path === path && current?.line === index + 1
+                );
+                return line;
+            }}));
             gutter.scrollTop = editor.scrollTop;
         }};
         const syncEditorScroll = editor => {{
@@ -1060,6 +1082,18 @@ goal editor: View::web = """
                 hideDiagnosticTooltip();
             }}
         }}, true);
+        document.addEventListener("click", event => {{
+            const line = event.target.closest(".line-number");
+            if (!line) return;
+            const path = window.__sicCurrentFile;
+            if (!path) return;
+            const number = Number(line.dataset.line);
+            const breakpoints = window.__sicBreakpoints.get(path) || new Set();
+            if (breakpoints.has(number)) breakpoints.delete(number);
+            else breakpoints.add(number);
+            window.__sicBreakpoints.set(path, breakpoints);
+            updateLineNumbers(document.querySelector(".source-editor"));
+        }});
         document.addEventListener("selectionchange", () => {{
             if (document.activeElement?.matches?.(".source-editor"))
                 highlightUsages(document.activeElement);
@@ -1080,6 +1114,9 @@ goal editor: View::web = """
         let workspaceGoals = [];
         let selectedGoal = null;
         let lastRunOutput = "Wähle ein Goal und starte es mit ▶.";
+        let debugTrace = [];
+        let debugIndex = -1;
+        let debugResult = null;
 
         const sourceEditor = () => document.querySelector(".source-editor");
         const setSaveStatus = (text, kind = "") => {{
@@ -1288,20 +1325,29 @@ goal editor: View::web = """
                 node.textContent = `Run: ${{selectedGoal?.label || "Goal"}}`
             );
         }};
-        const runSelectedGoal = async () => {{
-            if (!selectedGoal) {{ setSaveStatus("Kein Goal ausgewählt", "error"); return; }}
+        const collectGoalArguments = () => {{
+            const values = {{}};
+            for (const input of selectedGoal?.inputs || []) {{
+                const raw = window.prompt(`Argument ${{input.name}} (${{input.type}}):`, "");
+                if (raw === null) return null;
+                values[input.name] = parseGoalArgument(input, raw);
+            }}
+            return values;
+        }};
+        const prepareSelectedGoal = async () => {{
+            if (!selectedGoal) {{ setSaveStatus("Kein Goal ausgewählt", "error"); return false; }}
             if (dirty && currentFile === selectedGoal.path) {{
                 await saveWorkspaceFile();
-                if (dirty) return;
+                if (dirty) return false;
                 await refreshGoals();
             }}
-            const arguments_ = {{}};
+            return true;
+        }};
+        const runSelectedGoal = async () => {{
+            if (!await prepareSelectedGoal()) return;
             try {{
-                for (const input of selectedGoal.inputs || []) {{
-                    const raw = window.prompt(`Argument ${{input.name}} (${{input.type}}):`, "");
-                    if (raw === null) return;
-                    arguments_[input.name] = parseGoalArgument(input, raw);
-                }}
+                const arguments_ = collectGoalArguments();
+                if (arguments_ === null) return;
                 setSaveStatus(`Führe ${{selectedGoal.label}} aus…`);
                 const result = await window.sic.workspace.run(selectedGoal.path, arguments_);
                 const value = typeof result.value === "string"
@@ -1316,6 +1362,102 @@ goal editor: View::web = """
             if (!shell?.classList.contains("bottom-run"))
                 document.querySelector('.tool-stripe.left button[title="Run"]')?.click();
             displayRunOutput();
+        }};
+        const displayDebugState = () => {{
+            const event = debugTrace[debugIndex];
+            document.querySelectorAll("[data-debug-title]").forEach(node =>
+                node.textContent = event ? `Debug: ${{event.name}}` : "Debug"
+            );
+            document.querySelectorAll("[data-debug-frames]").forEach(list => {{
+                list.replaceChildren();
+                if (!event) {{
+                    const item = document.createElement("li");
+                    item.textContent = "Kein aktiver Debug-Lauf";
+                    list.append(item);
+                    return;
+                }}
+                debugTrace.slice(0, debugIndex + 1).reverse().forEach((frame, reverseIndex) => {{
+                    const item = document.createElement("li");
+                    item.textContent = `${{frame.path}}:${{frame.line}} · ${{frame.name}}`;
+                    item.classList.toggle("selected", reverseIndex === 0);
+                    list.append(item);
+                }});
+            }});
+            document.querySelectorAll("[data-debug-variables]").forEach(container => {{
+                container.replaceChildren();
+                const variables = event ? {{...event.variables, [event.name]: event.value}} : {{}};
+                for (const [name, value] of Object.entries(variables)) {{
+                    const row = document.createElement("div");
+                    row.className = "debug-row";
+                    const key = document.createElement("span");
+                    key.className = "debug-name";
+                    key.textContent = name;
+                    const shown = document.createElement("span");
+                    shown.className = "debug-value";
+                    shown.textContent = typeof value === "string" ? JSON.stringify(value) : JSON.stringify(value, null, 2);
+                    row.append(key, shown);
+                    container.append(row);
+                }}
+            }});
+            document.querySelectorAll("[data-debug-log]").forEach(node => {{
+                node.textContent = event
+                    ? `[debug] pausiert bei ${{event.path}}:${{event.line}}\n[debug] ${{event.name}} = ${{JSON.stringify(event.value)}}`
+                    : (debugResult ? `[debug] beendet\n${{debugResult.stdout || ""}}` : "Starte ein Goal mit D.");
+            }});
+        }};
+        const showDebugStep = async index => {{
+            if (!debugTrace.length) return;
+            debugIndex = Math.max(0, Math.min(index, debugTrace.length - 1));
+            const event = debugTrace[debugIndex];
+            window.__sicDebugLocation = {{path: event.path, line: event.line}};
+            if (currentFile !== event.path) await openWorkspaceFile(event.path, false);
+            document.querySelectorAll(".line-number").forEach(node =>
+                node.classList.toggle("debug-current", Number(node.dataset.line) === event.line)
+            );
+            displayDebugState();
+        }};
+        const startDebugging = async () => {{
+            if (!await prepareSelectedGoal()) return;
+            try {{
+                const arguments_ = collectGoalArguments();
+                if (arguments_ === null) return;
+                setSaveStatus(`Debugge ${{selectedGoal.label}}…`);
+                debugResult = await window.sic.workspace.debug(selectedGoal.path, arguments_);
+                debugTrace = debugResult.trace || [];
+                let first = debugTrace.findIndex(event =>
+                    window.__sicBreakpoints.get(event.path)?.has(event.line)
+                );
+                if (first < 0) first = 0;
+                const shell = document.querySelector(".ide-shell");
+                if (!shell?.classList.contains("bottom-debug"))
+                    document.querySelector('.tool-stripe.left button[title="Debug"]')?.click();
+                if (debugTrace.length) await showDebugStep(first);
+                else displayDebugState();
+                setSaveStatus("Debugger pausiert", "saved");
+            }} catch (error) {{
+                debugTrace = [];
+                debugResult = null;
+                setSaveStatus(error.message, "error");
+            }}
+        }};
+        const continueDebugging = async () => {{
+            if (!debugTrace.length) return;
+            let next = debugTrace.findIndex((event, index) =>
+                index > debugIndex && window.__sicBreakpoints.get(event.path)?.has(event.line)
+            );
+            if (next < 0) next = debugTrace.length - 1;
+            await showDebugStep(next);
+            if (next === debugTrace.length - 1) setSaveStatus("Debug-Lauf beendet", "saved");
+        }};
+        const stopDebugging = () => {{
+            debugTrace = [];
+            debugIndex = -1;
+            debugResult = null;
+            window.__sicDebugLocation = null;
+            document.querySelectorAll(".line-number.debug-current")
+                .forEach(node => node.classList.remove("debug-current"));
+            displayDebugState();
+            setSaveStatus("Debugger gestoppt");
         }};
         const parentPath = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
         const childPath = (directory, name) => directory ? `${{directory}}/${{name}}` : name;
@@ -1449,6 +1591,18 @@ goal editor: View::web = """
                 runSelectedGoal();
                 return;
             }}
+            if (event.target.closest(".status-actions .debug")) {{
+                hideRunGoalMenu();
+                startDebugging();
+                return;
+            }}
+            const debugAction = event.target.closest("[data-debug-action]")?.dataset.debugAction;
+            if (debugAction) {{
+                if (debugAction === "step") showDebugStep(debugIndex + 1);
+                else if (debugAction === "continue") continueDebugging();
+                else if (debugAction === "stop") stopDebugging();
+                return;
+            }}
             hideRunGoalMenu();
             const menuButton = event.target.closest("[data-workspace-menu-path]");
             if (menuButton) {{
@@ -1500,6 +1654,7 @@ goal editor: View::web = """
             renderWorkspace();
             updateFileLabels();
             displayRunOutput();
+            displayDebugState();
         }});
         setTimeout(refreshWorkspace, 0);
     }}

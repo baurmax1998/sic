@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import reduce
 import html
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, Callable
 from .. import ast
 from ..checker import CheckedProgram
 from ..effects import EffectMessage, EffectSubscription
@@ -103,6 +103,7 @@ class Evaluator:
         web_context: WebEvaluationContext | None = None,
         component_id: str | None = None,
         source_aliases: dict[str, set[str]] | None = None,
+        trace_callback: Callable[["Evaluator", str, Any], None] | None = None,
     ):
         self.checked = checked
         self.registry = registry or ModuleRegistry()
@@ -120,6 +121,7 @@ class Evaluator:
         self.state = self.web_context.state
         self.component_id = component_id
         self.source_aliases = source_aliases or {}
+        self.trace_callback = trace_callback
         self.active_stack: list[str] = []
 
     def run(self) -> ExecutionResult:
@@ -140,6 +142,7 @@ class Evaluator:
         nested = Evaluator(
             self.checked, self.registry, arguments, self.identity_origin,
             state=self.state, web_context=self.web_context,
+            trace_callback=self.trace_callback,
         )
         return nested.resolve(name)
 
@@ -175,6 +178,8 @@ class Evaluator:
                 self.state[name] = value
             else:
                 self.values[name] = value
+            if self.trace_callback is not None:
+                self.trace_callback(self, name, value)
             if name == self.checked.program.goal.name:
                 self.finalize_goal()
             logger.debug("[SIC] calculate-finish calculation=%s", name)
@@ -475,6 +480,7 @@ class Evaluator:
             checked, self.registry, arguments, spec.origin,
             state=self.state, web_context=self.web_context,
             component_id=component_id, source_aliases=argument_sources,
+            trace_callback=self.trace_callback,
         )
         return nested
 
