@@ -1,0 +1,16 @@
+goal rightPanel: Component::web = """
+<aside class="right-panel" aria-label="Rechtes Werkzeugfenster">
+    <div class="tool-content structure-content">
+        <div class="project-titlebar"><strong>Structure</strong><button sic:onclick="{on_close}">−</button></div>
+        <ul class="tool-list">
+            <li>◇ greeting: String</li>
+            <li>◇ prefix: String</li>
+            <li>◇ name: String</li>
+        </ul>
+    </div>
+    <div class="tool-content notifications-content">
+        <div class="project-titlebar"><strong>Notifications</strong><button sic:onclick="{on_close}">−</button></div>
+        <div class="tool-empty">Keine neuen Benachrichtigungen</div>
+    </div>
+</aside>
+"""

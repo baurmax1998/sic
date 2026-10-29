@@ -1,0 +1,80 @@
+goal bottomPanel: Component::web = """
+<section class="bottom-panel" aria-label="Ausgabe">
+    <div class="bottom-left">
+        <div class="bottom-content console-content">
+            <div class="bottom-titlebar"><strong>Console</strong><button title="Schließen" sic:onclick="{close_left}">×</button></div>
+            <pre class="console-screen">SIC Console
+&gt; _</pre>
+        </div>
+        <div class="bottom-content debug-content">
+            <div class="bottom-titlebar">
+                <strong>Debug: app.sic</strong>
+                <div class="debug-actions" aria-label="Debug-Aktionen">
+                    <span class="continue" title="Resume">▶</span><span title="Pause">Ⅱ</span>
+                    <span title="Step Over">↷</span><span title="Step Into">↓</span>
+                    <span title="Step Out">↑</span><span class="stop" title="Stop">■</span>
+                </div>
+                <button title="Schließen" sic:onclick="{close_left}">×</button>
+            </div>
+            <div class="debug-layout">
+                <div class="debug-section debug-frames">
+                    <strong>Threads & Frames</strong>
+                    <ul class="debug-tree">
+                        <li>▾ Main Thread</li>
+                        <li class="selected">　app.sic:1 · greeting</li>
+                        <li>　runtime.py:128 · evaluate</li>
+                        <li>　runner.py:42 · run</li>
+                    </ul>
+                </div>
+                <div class="resize-handle resize-debug resize-debug-frames" data-resize="debug-frames" aria-hidden="true"></div>
+                <div class="debug-section debug-variables-section">
+                    <strong>Variables</strong>
+                    <div class="debug-variables">
+                        <div class="debug-row"><span class="debug-name">source</span><span class="debug-value">"goal greeting: String = …" <span class="debug-type">String</span></span></div>
+                        <div class="debug-row"><span class="debug-name">prefix</span><span class="debug-value">"Hallo " <span class="debug-type">String</span></span></div>
+                        <div class="debug-row"><span class="debug-name">name</span><span class="debug-value">"SIC" <span class="debug-type">String</span></span></div>
+                        <div class="debug-row"><span class="debug-name">leftTool</span><span class="debug-value">"project" <span class="debug-type">String</span></span></div>
+                    </div>
+                    <div class="debug-subtitle">Watches</div>
+                    <div class="debug-row"><span>source</span><span class="debug-value">String</span></div>
+                    <div class="watch-add">＋ Add watch…</div>
+                </div>
+                <div class="resize-handle resize-debug resize-debug-variables" data-resize="debug-variables" aria-hidden="true"></div>
+                <div class="debug-section debug-log-section">
+                    <strong>Log Output</strong>
+                    <pre class="debug-log"><span class="info">[debug]</span> View wird kompiliert
+<span class="info">[debug]</span> greeting · app.sic:1
+<span class="success">[info]</span> WebSocket verbunden
+<span class="success">[info]</span> Haltepunkt erreicht</pre>
+                </div>
+            </div>
+        </div>
+        <div class="bottom-content run-content">
+            <div class="bottom-titlebar"><strong>Run: app.sic</strong><button title="Schließen" sic:onclick="{close_left}">×</button></div>
+            <pre class="console-screen">uv run sic serve examples/editor/app.sic
+SIC Editor läuft auf http://127.0.0.1:8001</pre>
+        </div>
+    </div>
+    <div class="bottom-right">
+        <div class="bottom-content make-bottom-content">
+            <div class="bottom-titlebar"><strong>Make</strong><button title="Schließen" sic:onclick="{close_right}">×</button></div>
+            <div class="project-body">
+                <div class="make-entry"><span class="target">editor</span><span class="play">▶</span><small>Editor starten</small></div>
+                <div class="make-entry"><span class="target">test</span><span class="play">▶</span><small>Tests ausführen</small></div>
+                <div class="make-entry"><span class="target">build</span><span class="play">▶</span><small>Webanwendung bauen</small></div>
+            </div>
+        </div>
+        <div class="bottom-content terminal-right-content">
+            <div class="bottom-titlebar">
+                <div class="terminal-tabs"><span class="active">Terminal 2</span><span>＋</span></div>
+                <button title="Schließen" sic:onclick="{close_right}">×</button>
+            </div>
+            <pre class="console-screen">SIC Terminal 2
+$ pwd
+/Users/project/examples/editor
+$ _</pre>
+        </div>
+    </div>
+    <div class="resize-handle resize-bottom-split" data-resize="bottom-split" aria-hidden="true"></div>
+</section>
+"""

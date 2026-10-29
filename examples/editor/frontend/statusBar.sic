@@ -1,0 +1,15 @@
+goal statusBar: Component::web = """
+<footer class="statusbar">
+    <span class="path">editor</span><span class="path-separator">›</span>
+    <span class="path">frontend</span><span class="path-separator">›</span>
+    <span class="path">app.sic</span>
+    <span class="status-spacer"></span>
+    <div class="status-actions" aria-label="Editor-Aktionen">
+        <button class="run" title="Run">▶</button>
+        <button class="run-config" title="Run Configuration"><span>app.sic</span><span>▾</span></button>
+        <button class="debug" title="Debug">D</button>
+        <button title="Search">⌕</button>
+        <button title="Settings">⚙</button>
+    </div>
+</footer>
+"""

@@ -491,19 +491,38 @@ async function call(name, values = {{}}) {{
     socket.send(JSON.stringify({{type: "call", id, name, values: {{...values}}}}));
   }});
 }}
+function hydrateSicBindings(container = document) {{
+  const nodes = [];
+  if (container instanceof HTMLTextAreaElement) nodes.push(container);
+  if (container.querySelectorAll) nodes.push(...container.querySelectorAll("textarea"));
+  for (const node of nodes) {{
+    if (node.hasAttribute("sic:bind-value")) {{
+      node.value = node.getAttribute("sic:bind-value") || "";
+    }}
+  }}
+}}
+hydrateSicBindings();
 socket.addEventListener("message", event => {{
   const message = JSON.parse(event.data);
   if (message.type === "replace") {{
     console.info("[SIC] View-Aktualisierung empfangen");
     const root = document.getElementById("sic-root");
-    if (root) root.innerHTML = message.html;
+    if (root) {{
+      root.innerHTML = message.html;
+      hydrateSicBindings(root);
+    }}
     document.getElementById("sic-diagnostic")?.remove();
     return;
   }}
   if (message.type === "replace-component") {{
     const current = [...document.querySelectorAll("[data-sic-component]")]
       .find(node => node.getAttribute("data-sic-component") === message.component);
-    if (current) current.outerHTML = message.html;
+    if (current) {{
+      current.outerHTML = message.html;
+      const replacement = [...document.querySelectorAll("[data-sic-component]")]
+        .find(node => node.getAttribute("data-sic-component") === message.component);
+      if (replacement) hydrateSicBindings(replacement);
+    }}
     return;
   }}
   if (message.type === "remove-component") {{

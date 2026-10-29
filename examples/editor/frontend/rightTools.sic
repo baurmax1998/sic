@@ -1,0 +1,9 @@
+goal rightTools: Component::web = """
+<aside class="tool-stripe right" aria-label="Rechte Werkzeugfenster">
+    <button class="{if right_tool == "structure" then "active" else ""}" title="Structure" sic:onclick="{on_structure}">⌘</button>
+    <button class="{if right_tool == "notifications" then "active" else ""}" title="Notifications" sic:onclick="{on_notifications}">◉</button>
+    <span class="spacer"></span>
+    <button class="{if right_bottom_tool == "make" then "active" else ""}" title="Make" sic:onclick="{on_make}">M</button>
+    <button class="{if right_bottom_tool == "terminal" then "active" else ""}" title="Terminal 2" sic:onclick="{on_terminal}">›_</button>
+</aside>
+"""

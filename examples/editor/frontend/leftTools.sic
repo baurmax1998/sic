@@ -1,0 +1,10 @@
+goal leftTools: Component::web = """
+<aside class="tool-stripe left" aria-label="Werkzeugfenster">
+    <button class="{if left_tool == "project" then "active" else ""}" title="Project" sic:onclick="{on_project}">▦</button>
+    <button class="{if left_tool == "todos" then "active" else ""}" title="TODOs" sic:onclick="{on_todos}">☑</button>
+    <span class="spacer"></span>
+    <button class="{if bottom_tool == "run" then "active" else ""}" title="Run" sic:onclick="{on_run}">▶</button>
+    <button class="{if bottom_tool == "debug" then "active" else ""}" title="Debug" sic:onclick="{on_debug}">D</button>
+    <button class="{if bottom_tool == "console" then "active" else ""}" title="Console" sic:onclick="{on_console}">›_</button>
+</aside>
+"""

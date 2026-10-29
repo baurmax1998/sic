@@ -1,0 +1,46 @@
+goal leftPanel: Component::web = """
+<aside class="project-panel" aria-label="Linkes Werkzeugfenster">
+    <div class="tool-content project-content">
+        <div class="project-titlebar">
+            <strong>Project</strong>
+            <button title="Optionen">⋮</button>
+            <button title="Minimieren" sic:onclick="{on_close}">−</button>
+        </div>
+        <nav class="project-body" aria-label="Dateibaum">
+            <ul class="file-tree">
+                <li>
+                    <details open>
+                        <summary>editor</summary>
+                        <ul>
+                            <li><div class="file-tree-file">app.sic</div></li>
+                            <li>
+                                <details open>
+                                    <summary>frontend</summary>
+                                    <ul>
+                                        <li><div class="file-tree-file active">app.sic</div></li>
+                                    </ul>
+                                </details>
+                            </li>
+                            <li>
+                                <details open>
+                                    <summary>backend</summary>
+                                    <ul><li><div class="file-tree-file">effects.sic</div></li></ul>
+                                </details>
+                            </li>
+                            <li><div class="file-tree-file markdown">README.md</div></li>
+                        </ul>
+                    </details>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    <div class="tool-content todos-content">
+        <div class="project-titlebar"><strong>TODOs</strong><button sic:onclick="{on_close}">−</button></div>
+        <div class="project-body">
+            <div class="todo-entry"><span>Implement file loading</span><small>frontend/app.sic:12</small></div>
+            <div class="todo-entry"><span>Add syntax highlighting</span><small>frontend/app.sic:28</small></div>
+            <div class="todo-entry"><span>Connect compiler output</span><small>backend/effects.sic:1</small></div>
+        </div>
+    </div>
+</aside>
+"""
