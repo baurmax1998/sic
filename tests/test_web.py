@@ -79,12 +79,48 @@ def test_sic_web_config_and_static_build(tmp_path):
     assert generated == [tmp_path / ".out" / "index.html"]
     document = generated[0].read_text(encoding="utf-8")
     assert "Hallo SIC" in document
-    assert "window.sic = {call, actions: definitions}" in document
+    assert "window.sic = {call, analyze, actions: definitions}" in document
     assert '"greet":{"transport":"websocket"}' in document
     assert 'console.info("[SIC] Aktion gesendet"' in document
     assert 'closestSicHandler(event.target, "sic:oninput")' in document
     assert "function hydrateSicBindings" in document
     assert 'CustomEvent("sic:bindings-hydrated"' in document
+
+
+def test_websocket_exposes_source_analysis(tmp_path):
+    config_path = web_project(tmp_path)
+    app = create_app(config_path)
+    with TestClient(app) as client:
+        with client.websocket_connect("/__sic_ws?page=/") as websocket:
+            websocket.receive_json()
+            websocket.send_json({
+                "type": "analyze", "id": "analysis-1",
+                "source": 'goal answer: Int = "wrong"',
+            })
+            response = websocket.receive_json()
+            assert response["type"] == "analysis"
+            assert response["id"] == "analysis-1"
+            assert response["result"]["diagnostics"][0]["severity"] == "error"
+            assert any(
+                token["type"] == "keyword"
+                for token in response["result"]["tokens"]
+            )
+
+            websocket.send_json({
+                "type": "analyze", "id": "analysis-2",
+                "source": 'goal text: String = "kaputt\nlet other = "ok"',
+            })
+            broken = websocket.receive_json()
+            assert broken["type"] == "analysis"
+            assert broken["result"]["diagnostics"]
+
+            websocket.send_json({
+                "type": "analyze", "id": "analysis-3",
+                "source": 'goal text: String = "wieder ok"',
+            })
+            recovered = websocket.receive_json()
+            assert recovered["type"] == "analysis"
+            assert recovered["result"]["diagnostics"] == []
 
 
 def test_web_goal_requires_standard_library_type(tmp_path):

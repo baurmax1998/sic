@@ -7,6 +7,35 @@ from sic.lang import (
     LangDefinitionOrderError, LangRuntimeError, LangTypeError, compile_program,
     run, standard_registry,
 )
+from sic.lang.tooling import analyze_source
+
+
+def test_source_analysis_returns_semantic_tokens_usages_and_diagnostics():
+    source = 'goal greeting: String = prefix + name\nlet prefix = "Hallo "\nlet name = "SIC"'
+    analysis = analyze_source(source, standard_registry())
+
+    assert not analysis["diagnostics"]
+    assert any(token["type"] == "keyword" for token in analysis["tokens"])
+    assert any(token["type"] == "type" for token in analysis["tokens"])
+    assert any(token["type"] == "string" for token in analysis["tokens"])
+    assert next(symbol for symbol in analysis["symbols"] if symbol["name"] == "prefix")[
+        "occurrences"
+    ] == [{"start": 24, "end": 30}, {"start": 42, "end": 48}]
+
+    invalid = analyze_source('goal value: Int = "falsch"', standard_registry())
+    assert invalid["diagnostics"][0]["severity"] == "error"
+    assert "Int" in invalid["diagnostics"][0]["message"]
+
+    broken_string = analyze_source(
+        'goal greeting: String = prefix + name\n'
+        'let prefix = "Hallo \nlet name = "SIC"',
+        standard_registry(),
+    )
+    assert broken_string["diagnostics"]
+    assert any(
+        "incomplete" in token.get("modifiers", [])
+        for token in broken_string["tokens"]
+    )
 
 
 def test_redundant_definition_annotation_is_rejected():

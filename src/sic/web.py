@@ -24,6 +24,7 @@ from .lang import ast
 from .lang.effects import EffectMessage, EffectSubscription
 from .lang.types import ListType, MapType, NullableType, Primitive, RecordType, Type, prune
 from .lang.web_values import WebValue
+from .lang.tooling import analyze_source
 
 
 logger = logging.getLogger("uvicorn.error.sic")
@@ -478,6 +479,14 @@ const socketReady = new Promise((resolve, reject) => {{
   }}, {{once: true}});
   socket.addEventListener("error", () => reject(new Error("WebSocket-Verbindung fehlgeschlagen")), {{once: true}});
 }});
+async function analyze(source) {{
+  await socketReady;
+  const id = String(++callSequence);
+  return new Promise((resolve, reject) => {{
+    pendingCalls.set(id, {{resolve, reject}});
+    socket.send(JSON.stringify({{type: "analyze", id, source}}));
+  }});
+}}
 async function call(name, values = {{}}) {{
   definition(name);
   await socketReady;
@@ -549,8 +558,8 @@ socket.addEventListener("message", event => {{
   const pending = pendingCalls.get(String(message.id));
   if (!pending) return;
   pendingCalls.delete(String(message.id));
-  if (message.type === "result") {{
-    console.info("[SIC] Aktion abgeschlossen", {{id: message.id}});
+  if (message.type === "result" || message.type === "analysis") {{
+    if (message.type === "result") console.info("[SIC] Aktion abgeschlossen", {{id: message.id}});
     pending.resolve(message.result);
   }} else {{
     console.error("[SIC] Aktion fehlgeschlagen", message);
@@ -629,7 +638,7 @@ document.addEventListener("click", async event => {{
   show(name, result);
   document.dispatchEvent(new CustomEvent("sic:result", {{detail: {{name, result}}}}));
 }});
-window.sic = {{call, actions: definitions}};
+window.sic = {{call, analyze, actions: definitions}};
 """.strip()
 
 
@@ -919,6 +928,24 @@ def create_app(config_path: str | Path = "app.sic"):
                 hex(id(token)), pathname, len(subscriptions), len(body.encode("utf-8")),
             )
 
+        async def execute_analysis(message: dict[str, Any]) -> None:
+            source = message.get("source")
+            identifier = str(message.get("id", ""))
+            if not isinstance(source, str):
+                await websocket.send_json({
+                    "type": "error", "id": identifier,
+                    "detail": "Analyse benötigt Quelltext als String",
+                })
+                return
+            registry = compiled[2] if compiled is not None else _project_registry(
+                config.root, config.backend, config.backend_programs,
+                include_frontend=True,
+            )
+            result = await run_in_threadpool(analyze_source, source, registry)
+            await websocket.send_json({
+                "type": "analysis", "id": identifier, "result": result,
+            })
+
         async def execute_local_event(message: dict[str, Any]) -> None:
             nonlocal current_evaluator
             if current_evaluator is None:
@@ -1042,6 +1069,8 @@ def create_app(config_path: str | Path = "app.sic"):
                         continue
                     if isinstance(message, dict) and message.get("type") == "call":
                         await execute_socket_call(websocket, message)
+                    elif isinstance(message, dict) and message.get("type") == "analyze":
+                        await execute_analysis(message)
                     elif isinstance(message, dict) and message.get("type") == "event":
                         await execute_local_event(message)
                     else:

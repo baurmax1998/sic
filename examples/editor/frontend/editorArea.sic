@@ -9,13 +9,16 @@ goal editorArea: Component::web = """
     </div>
     <div class="editor-canvas">
         <div class="line-numbers" aria-hidden="true">1</div>
-        <textarea
-            class="source-editor"
-            aria-label="SIC-Quelltext"
-            spellcheck="false"
-            sic:bind-value="{source: String}"
-            sic:oninput="{on_change}"
-        ></textarea>
+        <div class="editor-input">
+            <pre class="highlight-layer" aria-hidden="true"></pre>
+            <textarea
+                class="source-editor"
+                aria-label="SIC-Quelltext"
+                spellcheck="false"
+                sic:bind-value="{source: String}"
+                sic:oninput="{on_change}"
+            ></textarea>
+        </div>
     </div>
 </section>
 """
