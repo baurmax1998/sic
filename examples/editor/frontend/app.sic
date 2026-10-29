@@ -3,6 +3,12 @@ goal editor: View::web = """
     :root {{
         color-scheme: dark;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --left-panel-width: 13rem;
+        --right-panel-width: 13rem;
+        --bottom-panel-height: 12rem;
+        --bottom-left-width: 50%;
+        --debug-frames-width: 12rem;
+        --debug-variables-width: 20rem;
         background: #2b2b2b;
         color: #bbbbbb;
     }}
@@ -13,7 +19,7 @@ goal editor: View::web = """
     button {{ color: inherit; }}
     .ide-shell {{
         display: grid;
-        grid-template-columns: 2.05rem 15rem minmax(30rem, 1fr) 15rem 2.05rem;
+        grid-template-columns: 2.05rem var(--left-panel-width) minmax(30rem, 1fr) var(--right-panel-width) 2.05rem;
         grid-template-rows: minmax(0, 1fr) 0 1.55rem;
         width: 100vw;
         height: 100vh;
@@ -66,13 +72,11 @@ goal editor: View::web = """
         min-height: 0;
     }}
     .left-project .project-content,
-    .left-structure .structure-content,
-    .left-commit .commit-content,
-    .right-notifications .notifications-content,
-    .right-database .database-content,
-    .right-ai .ai-content {{ display: grid; }}
-    .ide-shell.left-closed {{ grid-template-columns: 2.05rem 0 minmax(30rem, 1fr) 15rem 2.05rem; }}
-    .ide-shell.right-closed {{ grid-template-columns: 2.05rem 15rem minmax(30rem, 1fr) 0 2.05rem; }}
+    .left-todos .todos-content,
+    .right-structure .structure-content,
+    .right-notifications .notifications-content {{ display: grid; }}
+    .ide-shell.left-closed {{ grid-template-columns: 2.05rem 0 minmax(30rem, 1fr) var(--right-panel-width) 2.05rem; }}
+    .ide-shell.right-closed {{ grid-template-columns: 2.05rem var(--left-panel-width) minmax(30rem, 1fr) 0 2.05rem; }}
     .ide-shell.left-closed.right-closed {{ grid-template-columns: 2.05rem 0 minmax(30rem, 1fr) 0 2.05rem; }}
     .project-titlebar {{
         display: flex;
@@ -106,26 +110,19 @@ goal editor: View::web = """
         color: #8f8f8f;
         text-align: center;
     }}
-    .commit-box, .ai-box {{ padding: 0.65rem; }}
-    .commit-box textarea, .ai-box textarea {{
-        width: 100%;
-        min-height: 5rem;
+    .todo-entry, .make-entry {{
+        display: grid;
+        gap: 0.2rem;
+        margin: 0.35rem 0.5rem;
         padding: 0.5rem;
-        resize: vertical;
-        border: 1px solid #5a5a5a;
         border-radius: 3px;
-        outline: none;
-        background: #2b2b2b;
-        color: #c8c8c8;
+        background: #353739;
     }}
-    .panel-button {{
-        margin-top: 0.5rem;
-        padding: 0.4rem 0.7rem;
-        border: 1px solid #5b7fa8;
-        border-radius: 3px;
-        background: #365880;
-        color: white;
-    }}
+    .todo-entry small, .make-entry small {{ color: #8f8f8f; }}
+    .make-entry {{ grid-template-columns: 1fr auto; align-items: center; }}
+    .make-entry small {{ grid-column: 1 / -1; }}
+    .make-entry .target {{ color: #ffc66d; font-family: monospace; }}
+    .make-entry .play {{ color: #62b543; }}
     .file-tree, .file-tree ul {{ margin: 0; padding: 0; list-style: none; }}
     .file-tree details > summary {{
         min-height: 1.55rem;
@@ -242,30 +239,186 @@ goal editor: View::web = """
         grid-column: 2 / 5;
         grid-row: 2;
         display: none;
-        grid-template-rows: 2rem minmax(0, 1fr);
         min-width: 0;
         min-height: 0;
         border-top: 1px solid #515151;
         background: #2b2b2b;
     }}
-    .bottom-open {{ grid-template-rows: minmax(0, 1fr) 12rem 1.55rem; }}
-    .bottom-open .bottom-panel {{ display: grid; }}
-    .terminal-titlebar {{
+    .bottom-open {{ grid-template-rows: minmax(0, 1fr) var(--bottom-panel-height) 1.55rem; }}
+    .bottom-open .bottom-panel {{
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+    }}
+    .bottom-split .bottom-panel {{
+        grid-template-columns: var(--bottom-left-width) minmax(0, 1fr);
+    }}
+    .resize-handle {{
+        z-index: 20;
+        touch-action: none;
+        user-select: none;
+    }}
+    .resize-handle::after {{
+        content: "";
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        transition: background 120ms ease;
+    }}
+    .resize-handle:hover::after, .resize-handle.dragging::after {{ background: #589df6; }}
+    .resize-left, .resize-right {{
+        grid-row: 1;
+        width: 5px;
+        min-height: 0;
+        cursor: col-resize;
+    }}
+    .resize-left {{ grid-column: 2; justify-self: end; transform: translateX(2px); }}
+    .resize-right {{ grid-column: 4; justify-self: start; transform: translateX(-2px); }}
+    .left-closed .resize-left, .right-closed .resize-right {{ display: none; }}
+    .resize-bottom {{
+        display: none;
+        grid-column: 2 / 5;
+        grid-row: 2;
+        align-self: start;
+        width: 100%;
+        height: 5px;
+        cursor: row-resize;
+        transform: translateY(-2px);
+    }}
+    .bottom-open .resize-bottom {{ display: block; }}
+    .resize-bottom-split {{
+        display: none;
+        grid-column: 1;
+        grid-row: 1;
+        justify-self: end;
+        width: 5px;
+        height: 100%;
+        cursor: col-resize;
+        transform: translateX(2px);
+    }}
+    .bottom-split .resize-bottom-split {{ display: block; }}
+    .bottom-left, .bottom-right {{
+        display: none;
+        grid-column: 1;
+        grid-row: 1;
+        min-width: 0;
+        min-height: 0;
+    }}
+    .bottom-split .bottom-right {{ grid-column: 2; }}
+    .bottom-console .bottom-left,
+    .bottom-debug .bottom-left,
+    .bottom-run .bottom-left,
+    .bottom-make .bottom-right,
+    .bottom-terminal .bottom-right {{ display: block; }}
+    .bottom-split .bottom-right {{ border-left: 1px solid #515151; }}
+    .bottom-content {{
+        display: none;
+        grid-template-rows: 2rem minmax(0, 1fr);
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+    }}
+    .bottom-console .console-content,
+    .bottom-debug .debug-content,
+    .bottom-run .run-content,
+    .bottom-make .make-bottom-content,
+    .bottom-terminal .terminal-right-content {{ display: grid; }}
+    .bottom-titlebar {{
         display: flex;
         align-items: center;
         padding: 0 0.55rem;
         border-bottom: 1px solid #454545;
         background: #3c3f41;
     }}
-    .terminal-titlebar strong {{ flex: 1; }}
-    .terminal-titlebar button {{ border: 0; background: transparent; color: #aaaaaa; font-size: 1rem; }}
-    .terminal-screen {{
+    .bottom-titlebar strong {{ flex: 1; }}
+    .bottom-titlebar button {{ border: 0; background: transparent; color: #aaaaaa; font-size: 1rem; }}
+    .console-screen {{
         margin: 0;
         padding: 0.65rem 0.8rem;
         overflow: auto;
         color: #b8c7a3;
         font: 0.8rem/1.5 "JetBrains Mono", Consolas, monospace;
     }}
+    .debug-actions {{
+        display: flex;
+        align-items: center;
+        gap: 0.15rem;
+        margin-right: 0.45rem;
+    }}
+    .debug-actions span {{
+        display: grid;
+        place-items: center;
+        min-width: 1.35rem;
+        height: 1.35rem;
+        border-radius: 3px;
+        color: #bdbdbd;
+    }}
+    .debug-actions span:hover {{ background: #505254; }}
+    .debug-actions .continue {{ color: #62b543; }}
+    .debug-actions .stop {{ color: #d65c5c; }}
+    .debug-layout {{
+        display: grid;
+        grid-template-columns: var(--debug-frames-width) var(--debug-variables-width) minmax(8rem, 1fr);
+        min-width: 0;
+        min-height: 0;
+        color: #c8c8c8;
+    }}
+    .debug-section {{ min-width: 0; padding: 0.55rem; border-right: 1px solid #454545; overflow: auto; }}
+    .debug-frames {{ grid-column: 1; grid-row: 1; }}
+    .debug-variables-section {{ grid-column: 2; grid-row: 1; }}
+    .debug-log-section {{ grid-column: 3; grid-row: 1; }}
+    .resize-debug {{
+        grid-row: 1;
+        justify-self: end;
+        width: 5px;
+        height: 100%;
+        cursor: col-resize;
+        transform: translateX(2px);
+    }}
+    .resize-debug-frames {{ grid-column: 1; }}
+    .resize-debug-variables {{ grid-column: 2; }}
+    .debug-section:last-child {{ border-right: 0; }}
+    .debug-section > strong {{
+        display: block;
+        margin-bottom: 0.45rem;
+        color: #dddddd;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+    }}
+    .debug-tree, .debug-variables {{ margin: 0; padding: 0; list-style: none; }}
+    .debug-tree li, .debug-row {{ padding: 0.2rem 0.3rem; border-radius: 2px; white-space: nowrap; }}
+    .debug-tree li:hover, .debug-row:hover {{ background: #3d3f41; }}
+    .debug-tree .selected {{ background: #4b6eaf; color: white; }}
+    .debug-row {{ display: grid; grid-template-columns: minmax(6rem, 0.8fr) minmax(8rem, 1.2fr); gap: 0.6rem; }}
+    .debug-name {{ color: #9876aa; }}
+    .debug-value {{ color: #6a8759; overflow: hidden; text-overflow: ellipsis; }}
+    .debug-type {{ color: #808080; }}
+    .debug-subtitle {{
+        margin: 0.75rem 0 0.35rem;
+        padding-top: 0.55rem;
+        border-top: 1px solid #454545;
+        color: #dddddd;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }}
+    .watch-add {{ margin-top: 0.35rem; color: #808080; }}
+    .debug-log {{
+        margin: 0;
+        color: #a9b7c6;
+        white-space: pre-wrap;
+        font: 0.76rem/1.5 "JetBrains Mono", Consolas, monospace;
+    }}
+    .debug-log .info {{ color: #6897bb; }}
+    .debug-log .success {{ color: #6a8759; }}
+    .terminal-tabs {{
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin-right: auto;
+        color: #bdbdbd;
+    }}
+    .terminal-tabs .active {{ padding: 0.25rem 0.4rem; border-bottom: 2px solid #589df6; color: #eeeeee; }}
     .statusbar {{
         grid-column: 1 / -1;
         grid-row: 3;
@@ -313,19 +466,20 @@ goal editor: View::web = """
     .statusbar .status-spacer {{ flex: 1; }}
     .statusbar span {{ white-space: nowrap; }}
     @media (max-width: 1000px) {{
-        .ide-shell {{ grid-template-columns: 1.8rem 11rem minmax(24rem, 1fr) 11rem 1.8rem; }}
-        .ide-shell.left-closed {{ grid-template-columns: 1.8rem 0 minmax(24rem, 1fr) 11rem 1.8rem; }}
-        .ide-shell.right-closed {{ grid-template-columns: 1.8rem 11rem minmax(24rem, 1fr) 0 1.8rem; }}
+        .ide-shell {{ grid-template-columns: 1.8rem var(--left-panel-width) minmax(24rem, 1fr) var(--right-panel-width) 1.8rem; }}
+        .ide-shell.left-closed {{ grid-template-columns: 1.8rem 0 minmax(24rem, 1fr) var(--right-panel-width) 1.8rem; }}
+        .ide-shell.right-closed {{ grid-template-columns: 1.8rem var(--left-panel-width) minmax(24rem, 1fr) 0 1.8rem; }}
         .ide-shell.left-closed.right-closed {{ grid-template-columns: 1.8rem 0 minmax(24rem, 1fr) 0 1.8rem; }}
     }}
 </style>
-<main class="ide-shell {if leftTool == "" then "left-closed" else "left-" + leftTool} {if rightTool == "" then "right-closed" else "right-" + rightTool} {if bottomTool == "terminal" then "bottom-open" else ""}">
+<main class="ide-shell {if leftTool == "" then "left-closed" else "left-" + leftTool} {if rightTool == "" then "right-closed" else "right-" + rightTool} {if bottomTool == "" and rightBottomTool == "" then "" else "bottom-open"} {if bottomTool == "" then "" else "bottom-" + bottomTool} {if rightBottomTool == "" then "" else "bottom-" + rightBottomTool} {if bottomTool != "" and rightBottomTool != "" then "bottom-split" else ""}">
     <aside class="tool-stripe left" aria-label="Werkzeugfenster">
         <button class="{if leftTool == "project" then "active" else ""}" title="Project" sic:onclick="{_ => leftTool <- if leftTool == "project" then "" else "project"}">▦</button>
-        <button class="{if leftTool == "structure" then "active" else ""}" title="Structure" sic:onclick="{_ => leftTool <- if leftTool == "structure" then "" else "structure"}">⌘</button>
-        <button class="{if leftTool == "commit" then "active" else ""}" title="Commit" sic:onclick="{_ => leftTool <- if leftTool == "commit" then "" else "commit"}">✓</button>
+        <button class="{if leftTool == "todos" then "active" else ""}" title="TODOs" sic:onclick="{_ => leftTool <- if leftTool == "todos" then "" else "todos"}">☑</button>
         <span class="spacer"></span>
-        <button class="{if bottomTool == "terminal" then "active" else ""}" title="Terminal" sic:onclick="{_ => bottomTool <- if bottomTool == "terminal" then "" else "terminal"}">›_</button>
+        <button class="{if bottomTool == "run" then "active" else ""}" title="Run" sic:onclick="{_ => bottomTool <- if bottomTool == "run" then "" else "run"}">▶</button>
+        <button class="{if bottomTool == "debug" then "active" else ""}" title="Debug" sic:onclick="{_ => bottomTool <- if bottomTool == "debug" then "" else "debug"}">D</button>
+        <button class="{if bottomTool == "console" then "active" else ""}" title="Console" sic:onclick="{_ => bottomTool <- if bottomTool == "console" then "" else "console"}">›_</button>
     </aside>
 
     <aside class="project-panel" aria-label="Linkes Werkzeugfenster">
@@ -365,24 +519,16 @@ goal editor: View::web = """
             </ul>
         </nav>
         </div>
-        <div class="tool-content structure-content">
-            <div class="project-titlebar"><strong>Structure</strong><button sic:onclick="{_ => leftTool <- ""}">−</button></div>
-            <ul class="tool-list">
-                <li>◇ greeting: String</li>
-                <li>◇ prefix: String</li>
-                <li>◇ name: String</li>
-            </ul>
-        </div>
-        <div class="tool-content commit-content">
-            <div class="project-titlebar"><strong>Commit</strong><button sic:onclick="{_ => leftTool <- ""}">−</button></div>
-            <div class="commit-box">
-                <strong>Changes</strong>
-                <ul class="tool-list"><li>frontend/app.sic</li></ul>
-                <textarea placeholder="Commit message"></textarea>
-                <button class="panel-button">Commit</button>
+        <div class="tool-content todos-content">
+            <div class="project-titlebar"><strong>TODOs</strong><button sic:onclick="{_ => leftTool <- ""}">−</button></div>
+            <div class="project-body">
+                <div class="todo-entry"><span>Implement file loading</span><small>frontend/app.sic:12</small></div>
+                <div class="todo-entry"><span>Add syntax highlighting</span><small>frontend/app.sic:28</small></div>
+                <div class="todo-entry"><span>Connect compiler output</span><small>backend/effects.sic:1</small></div>
             </div>
         </div>
     </aside>
+    <div class="resize-handle resize-left" data-resize="left" aria-hidden="true"></div>
 
     <section class="editor-panel">
         <div class="tabs">
@@ -428,35 +574,111 @@ goal editor: View::web = """
     </section>
 
     <aside class="right-panel" aria-label="Rechtes Werkzeugfenster">
+        <div class="tool-content structure-content">
+            <div class="project-titlebar"><strong>Structure</strong><button sic:onclick="{_ => rightTool <- ""}">−</button></div>
+            <ul class="tool-list">
+                <li>◇ greeting: String</li>
+                <li>◇ prefix: String</li>
+                <li>◇ name: String</li>
+            </ul>
+        </div>
         <div class="tool-content notifications-content">
             <div class="project-titlebar"><strong>Notifications</strong><button sic:onclick="{_ => rightTool <- ""}">−</button></div>
             <div class="tool-empty">Keine neuen Benachrichtigungen</div>
         </div>
-        <div class="tool-content database-content">
-            <div class="project-titlebar"><strong>Database</strong><button sic:onclick="{_ => rightTool <- ""}">−</button></div>
-            <ul class="tool-list"><li>＋ Data Source</li><li>⌁ Local files</li></ul>
-        </div>
-        <div class="tool-content ai-content">
-            <div class="project-titlebar"><strong>AI Assistant</strong><button sic:onclick="{_ => rightTool <- ""}">−</button></div>
-            <div class="ai-box"><textarea placeholder="Ask AI Assistant"></textarea><button class="panel-button">Send</button></div>
-        </div>
     </aside>
+    <div class="resize-handle resize-right" data-resize="right" aria-hidden="true"></div>
 
     <aside class="tool-stripe right" aria-label="Rechte Werkzeugfenster">
+        <button class="{if rightTool == "structure" then "active" else ""}" title="Structure" sic:onclick="{_ => rightTool <- if rightTool == "structure" then "" else "structure"}">⌘</button>
         <button class="{if rightTool == "notifications" then "active" else ""}" title="Notifications" sic:onclick="{_ => rightTool <- if rightTool == "notifications" then "" else "notifications"}">◉</button>
-        <button class="{if rightTool == "database" then "active" else ""}" title="Database" sic:onclick="{_ => rightTool <- if rightTool == "database" then "" else "database"}">▤</button>
         <span class="spacer"></span>
-        <button class="{if rightTool == "ai" then "active" else ""}" title="AI Assistant" sic:onclick="{_ => rightTool <- if rightTool == "ai" then "" else "ai"}">✦</button>
+        <button class="{if rightBottomTool == "make" then "active" else ""}" title="Make" sic:onclick="{_ => rightBottomTool <- if rightBottomTool == "make" then "" else "make"}">M</button>
+        <button class="{if rightBottomTool == "terminal" then "active" else ""}" title="Terminal 2" sic:onclick="{_ => rightBottomTool <- if rightBottomTool == "terminal" then "" else "terminal"}">›_</button>
     </aside>
 
-    <section class="bottom-panel" aria-label="Terminal">
-        <div class="terminal-titlebar">
-            <strong>Terminal</strong>
-            <button title="Schließen" sic:onclick="{_ => bottomTool <- ""}">×</button>
+    <section class="bottom-panel" aria-label="Ausgabe">
+        <div class="bottom-left">
+            <div class="bottom-content console-content">
+                <div class="bottom-titlebar"><strong>Console</strong><button title="Schließen" sic:onclick="{_ => bottomTool <- ""}">×</button></div>
+                <pre class="console-screen">SIC Console
+&gt; _</pre>
+            </div>
+            <div class="bottom-content debug-content">
+                <div class="bottom-titlebar">
+                    <strong>Debug: app.sic</strong>
+                    <div class="debug-actions" aria-label="Debug-Aktionen">
+                        <span class="continue" title="Resume">▶</span>
+                        <span title="Pause">Ⅱ</span>
+                        <span title="Step Over">↷</span>
+                        <span title="Step Into">↓</span>
+                        <span title="Step Out">↑</span>
+                        <span class="stop" title="Stop">■</span>
+                    </div>
+                    <button title="Schließen" sic:onclick="{_ => bottomTool <- ""}">×</button>
+                </div>
+                <div class="debug-layout">
+                    <div class="debug-section debug-frames">
+                        <strong>Threads & Frames</strong>
+                        <ul class="debug-tree">
+                            <li>▾ Main Thread</li>
+                            <li class="selected">　app.sic:1 · greeting</li>
+                            <li>　runtime.py:128 · evaluate</li>
+                            <li>　runner.py:42 · run</li>
+                        </ul>
+                    </div>
+                    <div class="resize-handle resize-debug resize-debug-frames" data-resize="debug-frames" aria-hidden="true"></div>
+                    <div class="debug-section debug-variables-section">
+                        <strong>Variables</strong>
+                        <div class="debug-variables">
+                            <div class="debug-row"><span class="debug-name">source</span><span class="debug-value">"goal greeting: String = …" <span class="debug-type">String</span></span></div>
+                            <div class="debug-row"><span class="debug-name">prefix</span><span class="debug-value">"Hallo " <span class="debug-type">String</span></span></div>
+                            <div class="debug-row"><span class="debug-name">name</span><span class="debug-value">"SIC" <span class="debug-type">String</span></span></div>
+                            <div class="debug-row"><span class="debug-name">leftTool</span><span class="debug-value">"project" <span class="debug-type">String</span></span></div>
+                        </div>
+                        <div class="debug-subtitle">Watches</div>
+                        <div class="debug-row"><span>source</span><span class="debug-value">String</span></div>
+                        <div class="watch-add">＋ Add watch…</div>
+                    </div>
+                    <div class="resize-handle resize-debug resize-debug-variables" data-resize="debug-variables" aria-hidden="true"></div>
+                    <div class="debug-section debug-log-section">
+                        <strong>Log Output</strong>
+                        <pre class="debug-log"><span class="info">[debug]</span> View wird kompiliert
+<span class="info">[debug]</span> greeting · app.sic:1
+<span class="success">[info]</span> WebSocket verbunden
+<span class="success">[info]</span> Haltepunkt erreicht</pre>
+                    </div>
+                </div>
+            </div>
+            <div class="bottom-content run-content">
+                <div class="bottom-titlebar"><strong>Run: app.sic</strong><button title="Schließen" sic:onclick="{_ => bottomTool <- ""}">×</button></div>
+                <pre class="console-screen">uv run sic serve examples/editor/app.sic
+SIC Editor läuft auf http://127.0.0.1:8001</pre>
+            </div>
         </div>
-        <pre class="terminal-screen">SIC Editor Terminal
+        <div class="bottom-right">
+            <div class="bottom-content make-bottom-content">
+                <div class="bottom-titlebar"><strong>Make</strong><button title="Schließen" sic:onclick="{_ => rightBottomTool <- ""}">×</button></div>
+                <div class="project-body">
+                    <div class="make-entry"><span class="target">editor</span><span class="play">▶</span><small>Editor starten</small></div>
+                    <div class="make-entry"><span class="target">test</span><span class="play">▶</span><small>Tests ausführen</small></div>
+                    <div class="make-entry"><span class="target">build</span><span class="play">▶</span><small>Webanwendung bauen</small></div>
+                </div>
+            </div>
+            <div class="bottom-content terminal-right-content">
+                <div class="bottom-titlebar">
+                    <div class="terminal-tabs"><span class="active">Terminal 2</span><span>＋</span></div>
+                    <button title="Schließen" sic:onclick="{_ => rightBottomTool <- ""}">×</button>
+                </div>
+                <pre class="console-screen">SIC Terminal 2
+$ pwd
+/Users/project/examples/editor
 $ _</pre>
+            </div>
+        </div>
+        <div class="resize-handle resize-bottom-split" data-resize="bottom-split" aria-hidden="true"></div>
     </section>
+    <div class="resize-handle resize-bottom" data-resize="bottom" aria-hidden="true"></div>
 
     <footer class="statusbar">
         <span class="path">editor</span>
@@ -474,9 +696,86 @@ $ _</pre>
         </div>
     </footer>
 </main>
+<script>
+(() => {{
+    const root = document.documentElement;
+    const properties = {{
+        left: "--left-panel-width",
+        right: "--right-panel-width",
+        bottom: "--bottom-panel-height",
+        "bottom-split": "--bottom-left-width",
+        "debug-frames": "--debug-frames-width",
+        "debug-variables": "--debug-variables-width"
+    }};
+    for (const [name, property] of Object.entries(properties)) {{
+        const saved = localStorage.getItem(`sic-editor-${{name}}-size`);
+        if (saved) root.style.setProperty(property, `${{saved}}px`);
+    }}
+    if (window.__sicEditorResizeInstalled) return;
+    window.__sicEditorResizeInstalled = true;
+
+    document.addEventListener("pointerdown", event => {{
+        const handle = event.target.closest("[data-resize]");
+        if (!handle) return;
+        const kind = handle.dataset.resize;
+        const shell = handle.closest(".ide-shell");
+        if (!shell || !properties[kind]) return;
+        event.preventDefault();
+        handle.classList.add("dragging");
+        handle.setPointerCapture?.(event.pointerId);
+
+        const move = moveEvent => {{
+            const bounds = shell.getBoundingClientRect();
+            let size;
+            let minimum = 120;
+            let maximum;
+            if (kind === "left") {{
+                size = moveEvent.clientX - bounds.left - 33;
+                maximum = bounds.width * 0.4;
+            }} else if (kind === "right") {{
+                size = bounds.right - moveEvent.clientX - 33;
+                maximum = bounds.width * 0.4;
+            }} else if (kind === "bottom") {{
+                size = bounds.bottom - moveEvent.clientY - 25;
+                minimum = 80;
+                maximum = bounds.height * 0.7;
+            }} else if (kind === "bottom-split") {{
+                const panelBounds = handle.closest(".bottom-panel").getBoundingClientRect();
+                size = moveEvent.clientX - panelBounds.left;
+                maximum = panelBounds.width - minimum;
+            }} else if (kind === "debug-frames") {{
+                const debugBounds = handle.closest(".debug-layout").getBoundingClientRect();
+                minimum = 90;
+                size = moveEvent.clientX - debugBounds.left;
+                maximum = debugBounds.width - 220;
+            }} else {{
+                const debugLayout = handle.closest(".debug-layout");
+                const debugBounds = debugLayout.getBoundingClientRect();
+                const frameBounds = debugLayout.querySelector(".debug-frames").getBoundingClientRect();
+                minimum = 100;
+                size = moveEvent.clientX - frameBounds.right;
+                maximum = debugBounds.right - frameBounds.right - 100;
+            }}
+            size = Math.round(Math.max(minimum, Math.min(maximum, size)));
+            root.style.setProperty(properties[kind], `${{size}}px`);
+            localStorage.setItem(`sic-editor-${{kind}}-size`, String(size));
+        }};
+        const stop = () => {{
+            handle.classList.remove("dragging");
+            document.removeEventListener("pointermove", move);
+            document.removeEventListener("pointerup", stop);
+            document.removeEventListener("pointercancel", stop);
+        }};
+        document.addEventListener("pointermove", move);
+        document.addEventListener("pointerup", stop);
+        document.addEventListener("pointercancel", stop);
+    }});
+}})();
+</script>
 """
 
 var source: String = "goal greeting: String = prefix + name\nlet prefix = \"Hallo \"\nlet name = \"SIC\""
 var leftTool: String = "project"
 var rightTool: String = ""
 var bottomTool: String = ""
+var rightBottomTool: String = ""
