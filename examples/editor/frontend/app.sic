@@ -672,6 +672,8 @@ goal editor: View::web = """
     }}
     .status-actions button:hover {{ background: #505254; color: white; }}
     .status-actions .run {{ color: #62b543; }}
+    .status-actions .serve {{ color: #8f8f8f; }}
+    .status-actions .serve.active {{ background: #36533b; color: #7bc96f; }}
     .status-actions .run-config {{
         display: flex;
         min-width: 6.5rem;
@@ -785,7 +787,9 @@ goal editor: View::web = """
             const layer = editor.closest(".editor-input")?.querySelector(".debug-inline-layer");
             if (!layer) return;
             const path = window.__sicCurrentFile || "";
-            const entries = (window.__sicDebugInline || []).filter(item => item.path === path);
+            const inlineTrace = window.__sicDebugInline?.length
+                ? window.__sicDebugInline : (window.__sicServeInline || []);
+            const entries = inlineTrace.filter(item => item.path === path);
             layer.replaceChildren();
             if (!entries.length) return;
             const style = getComputedStyle(editor);
@@ -796,6 +800,11 @@ goal editor: View::web = """
             const canvas = renderDebugInline.canvas ||= document.createElement("canvas");
             const context = canvas.getContext("2d");
             context.font = style.font;
+            const expandedLines = lines.map(line => line.replace(/\t/g, "    "));
+            const widestLine = expandedLines.reduce(
+                (widest, line) => Math.max(widest, context.measureText(line).width), 0
+            );
+            const alignedLeft = paddingLeft + widestLine - editor.scrollLeft + 24;
             const byLine = new Map();
             for (const entry of entries) {{
                 const values = byLine.get(entry.line) || [];
@@ -808,9 +817,7 @@ goal editor: View::web = """
                 const widget = document.createElement("span");
                 widget.className = "debug-inline-value";
                 widget.textContent = values.join("   ");
-                const sourceLine = (lines[line - 1] || "").replace(/\t/g, "    ");
-                const wantedLeft = paddingLeft + context.measureText(sourceLine).width - editor.scrollLeft + 14;
-                widget.style.left = `${{Math.max(paddingLeft, Math.min(wantedLeft, editor.clientWidth - 120))}}px`;
+                widget.style.left = `${{Math.max(paddingLeft, alignedLeft)}}px`;
                 widget.style.top = `${{paddingTop + (line - 1) * lineHeight - editor.scrollTop}}px`;
                 layer.append(widget);
             }}
@@ -1174,7 +1181,12 @@ goal editor: View::web = """
         let debugTrace = [];
         let debugIndex = -1;
         let debugResult = null;
+        let serveMode = false;
+        let serveArguments = {{}};
+        let serveTimer = null;
+        let serveVersion = 0;
         window.__sicDebugInline ||= [];
+        window.__sicServeInline ||= [];
 
         const sourceEditor = () => document.querySelector(".source-editor");
         const setSaveStatus = (text, kind = "") => {{
@@ -1191,6 +1203,9 @@ goal editor: View::web = """
                 node.textContent = selectedGoal?.label || "Goal wählen"
             );
             document.querySelectorAll(".editor-tab").forEach(node => node.classList.toggle("dirty", dirty));
+            document.querySelectorAll("[data-serve-toggle]").forEach(node =>
+                node.classList.toggle("active", serveMode)
+            );
             document.querySelectorAll("[data-dirty-indicator]").forEach(node => node.textContent = dirty ? "●" : "×");
             document.querySelectorAll("[data-workspace-file]").forEach(node =>
                 node.classList.toggle(
@@ -1521,6 +1536,47 @@ goal editor: View::web = """
             document.dispatchEvent(new CustomEvent("sic:debug-updated"));
             setSaveStatus("Debugger gestoppt");
         }};
+        const updateServeHints = async version => {{
+            if (!serveMode || !selectedGoal) return;
+            try {{
+                if (dirty) await saveWorkspaceFile();
+                if (!serveMode || version !== serveVersion || dirty) return;
+                const result = await window.sic.workspace.debug(selectedGoal.path, serveArguments);
+                if (!serveMode || version !== serveVersion) return;
+                window.__sicServeInline = result.trace || [];
+                document.dispatchEvent(new CustomEvent("sic:debug-updated"));
+                setSaveStatus(`Serve: ${{selectedGoal.label}} aktualisiert`, "saved");
+            }} catch (error) {{
+                if (version !== serveVersion) return;
+                window.__sicServeInline = [];
+                document.dispatchEvent(new CustomEvent("sic:debug-updated"));
+                setSaveStatus(`Serve: ${{error.message}}`, "error");
+            }}
+        }};
+        const scheduleServeUpdate = (delay = 300) => {{
+            if (!serveMode) return;
+            clearTimeout(serveTimer);
+            const version = ++serveVersion;
+            serveTimer = setTimeout(() => updateServeHints(version), delay);
+        }};
+        const toggleServeMode = () => {{
+            if (serveMode) {{
+                serveMode = false;
+                serveVersion++;
+                clearTimeout(serveTimer);
+                window.__sicServeInline = [];
+                document.dispatchEvent(new CustomEvent("sic:debug-updated"));
+                setSaveStatus("Serve-Modus beendet");
+            }} else {{
+                if (!selectedGoal) {{ setSaveStatus("Kein Goal ausgewählt", "error"); return; }}
+                const values = collectGoalArguments();
+                if (values === null) return;
+                serveArguments = values;
+                serveMode = true;
+                scheduleServeUpdate(0);
+            }}
+            updateFileLabels();
+        }};
         const parentPath = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
         const childPath = (directory, name) => directory ? `${{directory}}/${{name}}` : name;
         const selectedDirectory = () => selectedType === "directory"
@@ -1632,14 +1688,20 @@ goal editor: View::web = """
             menu.style.top = `${{Math.max(8, Math.min(bounds.bottom + 3, window.innerHeight - menuBounds.height - 8))}}px`;
         }};
         document.addEventListener("input", event => {{
-            if (event.target.matches?.(".source-editor") && currentFile)
+            if (event.target.matches?.(".source-editor") && currentFile) {{
                 setDirty(event.target.value !== savedContent);
+                scheduleServeUpdate();
+            }}
         }});
         document.addEventListener("click", event => {{
             const goalOption = event.target.closest("[data-run-goal]");
             if (goalOption) {{
                 selectedGoal = workspaceGoals[Number(goalOption.dataset.runGoal)] || null;
                 hideRunGoalMenu();
+                if (serveMode) {{
+                    const values = collectGoalArguments();
+                    if (values !== null) {{ serveArguments = values; scheduleServeUpdate(0); }}
+                }}
                 updateFileLabels();
                 return;
             }}
@@ -1656,6 +1718,11 @@ goal editor: View::web = """
             if (event.target.closest(".status-actions .debug")) {{
                 hideRunGoalMenu();
                 startDebugging();
+                return;
+            }}
+            if (event.target.closest("[data-serve-toggle]")) {{
+                hideRunGoalMenu();
+                toggleServeMode();
                 return;
             }}
             const debugAction = event.target.closest("[data-debug-action]")?.dataset.debugAction;

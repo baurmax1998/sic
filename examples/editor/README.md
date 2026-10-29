@@ -31,7 +31,14 @@ startet das ausgewählte Goal im Debugger. Das Debug-Fenster bietet Fortsetzen,
 Schritt über und Stop sowie Stack-, Variablen- und Laufzeitausgabe. Entsprechend
 der deklarativen Auswertung liegen Debug-Schritte auf `goal`-, `let`- und
 `var`-Bindungen. Bereits ausgewertete Bindungen werden während des Debuggens
-zusätzlich direkt hinter ihrer Quellzeile als Inline-Werte eingeblendet.
+zusätzlich in einer gemeinsamen Spalte rechts neben der längsten Quellzeile
+als Inline-Werte eingeblendet.
+
+Mit `⟳` wird der Serve-Modus für das ausgewählte Goal aktiviert. Änderungen
+werden nach kurzer Verzögerung gespeichert, das Goal wird erneut ausgewertet
+und die Inline-Werte werden automatisch aktualisiert. Ein erneuter Klick auf
+`⟳` beendet den Modus. `examples/basic/calculation.sic` enthält dafür eine
+mehrstufige Beispielberechnung.
 
 Der Editor unterstützt außerdem Zeilennummern, eigenes semantisches
 Syntax-Highlighting, Diagnosen, Verwendungshervorhebung und Autocomplete.

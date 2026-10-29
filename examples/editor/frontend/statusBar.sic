@@ -6,6 +6,7 @@ goal statusBar: Component::web = """
     <span class="status-spacer"></span>
     <div class="status-actions" aria-label="Editor-Aktionen">
         <button class="run" title="Run">▶</button>
+        <button class="serve" title="Serve-Modus: Goal bei Änderungen neu ausführen" data-serve-toggle>⟳</button>
         <button class="run-config" title="Run Configuration"><span>app.sic</span><span>▾</span></button>
         <button class="debug" title="Debug">D</button>
         <button title="Search">⌕</button>

@@ -1,0 +1,7 @@
+goal result: Int = final_result
+
+let final_result = squared - 25
+let squared = with_bonus * with_bonus
+let with_bonus = doubled + 5
+let doubled = start * 24
+let start = 1
